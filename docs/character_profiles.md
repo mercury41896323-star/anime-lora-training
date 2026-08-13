@@ -1,0 +1,33 @@
+# Character Profiles
+
+Character profiles are small JSON files that keep character identity stable before any LoRA training begins.
+
+## Location
+
+Profiles are written under:
+
+```text
+assets/processed/characters/<character_id>/profile.json
+```
+
+Generated frames for that character will later live beside the profile:
+
+```text
+assets/processed/characters/<character_id>/frames/
+```
+
+## Create a Profile
+
+```powershell
+python -m anime_studio.cli character init --id sample_hero --name "Sample Hero" --trigger-tag sample_hero
+```
+
+Keep `character_id` short, lowercase, and stable. It is intended for filenames, dataset paths, and future LoRA metadata.
+
+## Plan Frame Extraction
+
+```powershell
+python -m anime_studio.cli frames --video assets/raw/sample.mp4 --character-id sample_hero --fps 1 --dry-run
+```
+
+Remove `--dry-run` after installing FFmpeg and confirming the command looks correct.

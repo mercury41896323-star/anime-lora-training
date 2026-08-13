@@ -14,6 +14,11 @@ AIを活用したアニメーション制作支援・学習・生成環境を構
 
 最初の実装として、RTX 3050 6GB VRAM環境を前提にした軽量なプロジェクト骨格と、GPUを使わずに動作確認できる素材インベントリ生成CLIを追加しました。
 
+現在は次の入口も追加済みです。
+
+- CharacterProfile JSONの作成
+- FFmpegによるフレーム抽出コマンドの事前確認
+
 ## まず動かすもの
 
 この段階では重いAIモデルやGPU処理は使いません。まず素材置き場を確認し、プロジェクトがローカルで動くことを検証します。
@@ -69,7 +74,8 @@ anime-lora-training/
 ├─ config/
 │  └─ local_6gb.json
 ├─ docs/
-│  └─ development_start.md
+│  ├─ development_start.md
+│  └─ character_profiles.md
 ├─ scripts/
 │  └─ run_inventory.ps1
 ├─ src/
@@ -98,6 +104,28 @@ anime-lora-training/
 - 将来のフレーム抽出、タグ付け、CharacterProfile生成へつなげる
 
 対応拡張子は `config/local_6gb.json` で管理します。
+
+### CharacterProfile CLI
+
+キャラクターの一貫性を保つため、最初に小さなJSONプロファイルを作成できます。
+
+```powershell
+python -m anime_studio.cli character init --id sample_hero --name "Sample Hero" --trigger-tag sample_hero
+```
+
+出力先:
+
+```text
+assets/processed/characters/sample_hero/profile.json
+```
+
+### Frame Extraction CLI
+
+動画からのフレーム抽出はFFmpeg連携を前提にします。まずは`--dry-run`で実行予定コマンドだけ確認できます。
+
+```powershell
+python -m anime_studio.cli frames --video assets/raw/sample.mp4 --character-id sample_hero --fps 1 --dry-run
+```
 
 ## 6GB VRAM向け初期設定
 

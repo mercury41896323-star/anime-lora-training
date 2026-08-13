@@ -25,7 +25,7 @@ This gives the project a minimal working loop:
 
 ## Near-Term Next Steps
 
-- Add frame extraction with FFmpeg or OpenCV.
-- Add a character profile JSON schema.
+- Expand frame extraction with FFmpeg/OpenCV quality controls.
+- Add validation for character profile fields.
 - Add WD14 tagging as an optional module.
 - Add Kohya_ss config generation for low-VRAM LoRA training.
