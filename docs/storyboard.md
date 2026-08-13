@@ -88,13 +88,13 @@ python -m anime_studio.cli comfyui queue-submit --job-id <job_id>
 手動で画像や動画を Shot に紐づける場合:
 
 ```powershell
-python -m anime_studio.cli storyboard link-result --story-id pilot_scene --shot-id shot_001 --result outputs/manual/opening.png
+python -m anime_studio.storyboard_cli link-result --story-id pilot_scene --shot-id shot_001 --result outputs/manual/opening.png
 ```
 
 ComfyUI から取り込んだ結果を、workflow metadata の `story_id` / `shot_id` を使って自動で紐づける場合:
 
 ```powershell
-python -m anime_studio.cli storyboard link-comfyui-results --job-id <job_id>
+python -m anime_studio.storyboard_cli link-comfyui-results --job-id <job_id>
 ```
 
 出力先:
@@ -108,19 +108,19 @@ storyboards/pilot_scene/shot_results.json
 ## Shot の生成結果を一覧する
 
 ```powershell
-python -m anime_studio.cli storyboard results --story-id pilot_scene
+python -m anime_studio.storyboard_cli results --story-id pilot_scene
 ```
 
 特定 Shot だけ見る場合:
 
 ```powershell
-python -m anime_studio.cli storyboard results --story-id pilot_scene --shot-id shot_001
+python -m anime_studio.storyboard_cli results --story-id pilot_scene --shot-id shot_001
 ```
 
 JSON で確認する場合:
 
 ```powershell
-python -m anime_studio.cli storyboard results --story-id pilot_scene --json
+python -m anime_studio.storyboard_cli results --story-id pilot_scene --json
 ```
 
 ## 次の拡張候補
