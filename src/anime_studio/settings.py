@@ -20,9 +20,16 @@ class AssetPaths:
 
 
 @dataclass(frozen=True)
+class DatasetPaths:
+    lora: Path
+
+
+@dataclass(frozen=True)
 class AppSettings:
+    project_root: Path
     runtime: RuntimeProfile
     assets: AssetPaths
+    datasets: DatasetPaths
     image_extensions: tuple[str, ...]
     video_extensions: tuple[str, ...]
 
@@ -34,8 +41,10 @@ def load_settings(config_path: str | Path) -> AppSettings:
 
     runtime = data["runtime"]
     assets = data["assets"]
+    datasets = data.get("datasets", {})
 
     return AppSettings(
+        project_root=base_dir.resolve(),
         runtime=RuntimeProfile(
             name=runtime["name"],
             max_vram_gb=float(runtime["max_vram_gb"]),
@@ -45,6 +54,9 @@ def load_settings(config_path: str | Path) -> AppSettings:
         assets=AssetPaths(
             raw=(base_dir / assets["raw_dir"]).resolve(),
             processed=(base_dir / assets["processed_dir"]).resolve(),
+        ),
+        datasets=DatasetPaths(
+            lora=(base_dir / datasets.get("lora_dir", "datasets/lora")).resolve(),
         ),
         image_extensions=tuple(data["asset_types"]["image_extensions"]),
         video_extensions=tuple(data["asset_types"]["video_extensions"]),

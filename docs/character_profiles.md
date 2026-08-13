@@ -31,3 +31,11 @@ python -m anime_studio.cli frames --video assets/raw/sample.mp4 --character-id s
 ```
 
 Remove `--dry-run` after installing FFmpeg and confirming the command looks correct.
+
+## Register an Asset
+
+```powershell
+python -m anime_studio.cli character register-asset --id sample_hero --source assets/raw/sample.png
+```
+
+Registered files are copied into the character workspace under `assets/processed/characters/<character_id>/sources/`.

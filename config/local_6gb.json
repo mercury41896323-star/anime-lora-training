@@ -23,6 +23,9 @@
     "raw_dir": "assets/raw",
     "processed_dir": "assets/processed"
   },
+  "datasets": {
+    "lora_dir": "datasets/lora"
+  },
   "asset_types": {
     "image_extensions": [".png", ".jpg", ".jpeg", ".webp"],
     "video_extensions": [".mp4", ".mov", ".mkv", ".webm"]

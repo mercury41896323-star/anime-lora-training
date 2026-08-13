@@ -18,6 +18,9 @@ AIを活用したアニメーション制作支援・学習・生成環境を構
 
 - CharacterProfile JSONの作成
 - FFmpegによるフレーム抽出コマンドの事前確認
+- キャラクター素材登録
+- 手動タグsidecarの作成
+- LoRA学習用データセット生成
 
 ## まず動かすもの
 
@@ -75,20 +78,30 @@ anime-lora-training/
 │  └─ local_6gb.json
 ├─ docs/
 │  ├─ development_start.md
-│  └─ character_profiles.md
+│  ├─ character_profiles.md
+│  └─ phase2_pipeline.md
 ├─ scripts/
 │  └─ run_inventory.ps1
 ├─ src/
 │  └─ anime_studio/
 │     ├─ __init__.py
 │     ├─ asset_inventory.py
+│     ├─ character_manager.py
+│     ├─ character_profile.py
 │     ├─ cli.py
+│     ├─ dataset_builder.py
+│     ├─ frame_extraction.py
+│     ├─ tagger.py
 │     └─ settings.py
 ├─ assets/
 │  ├─ raw/
 │  └─ processed/
 └─ tests/
-   └─ test_asset_inventory.py
+   ├─ test_asset_inventory.py
+   ├─ test_character_manager.py
+   ├─ test_character_profile.py
+   ├─ test_frame_extraction.py
+   └─ test_tagger_and_dataset.py
 ```
 
 ## 最小プロトタイプ
@@ -126,6 +139,18 @@ assets/processed/characters/sample_hero/profile.json
 ```powershell
 python -m anime_studio.cli frames --video assets/raw/sample.mp4 --character-id sample_hero --fps 1 --dry-run
 ```
+
+### Character Asset / Dataset CLI
+
+キャラクターごとに素材を登録し、手動タグのsidecarを作り、LoRA学習用データセットへまとめます。
+
+```powershell
+python -m anime_studio.cli character register-asset --id sample_hero --source assets/raw/sample.png
+python -m anime_studio.cli tags --character-id sample_hero --extra-tag anime_style
+python -m anime_studio.cli dataset build-lora --character-id sample_hero
+```
+
+WD14本体はまだ同梱していません。まずは同じ`.txt` caption形式でパイプラインを固定し、後からWD14出力へ差し替えます。
 
 ## 6GB VRAM向け初期設定
 
@@ -287,6 +312,8 @@ python -m anime_studio.cli frames --video assets/raw/sample.mp4 --character-id s
 3. 動画フレーム抽出
 4. WD14タグ付け
 5. 学習データセット生成
+
+現在は、1-3と5の最小実装が入り、4は手動タグsidecar方式で入口を用意しています。
 
 ### Phase 3: LoRA学習
 

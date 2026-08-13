@@ -55,3 +55,21 @@ def create_character_profile(
         encoding="utf-8",
     )
     return profile_path
+
+
+def character_profile_path(settings: AppSettings, character_id: str) -> Path:
+    validate_character_id(character_id)
+    return settings.assets.processed / "characters" / character_id / "profile.json"
+
+
+def load_character_profile(settings: AppSettings, character_id: str) -> CharacterProfile:
+    profile_path = character_profile_path(settings, character_id)
+    data = json.loads(profile_path.read_text(encoding="utf-8"))
+    return CharacterProfile(
+        character_id=data["character_id"],
+        display_name=data["display_name"],
+        trigger_tags=list(data.get("trigger_tags", [])),
+        appearance_notes=data.get("appearance_notes", ""),
+        source_notes=data.get("source_notes", ""),
+        lora_files=list(data.get("lora_files", [])),
+    )
