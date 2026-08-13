@@ -15,13 +15,18 @@ from .settings import AppSettings
 class ComfyWorkflowExportResult:
     workflow_path: Path
     manifest_path: Path
+    template_path: Path
     lora_name: str
+
+
+DEFAULT_COMFYUI_TEMPLATE = Path("templates/comfyui/sd15_lora_txt2img_512.json")
+COMFYUI_TEMPLATE_DIR = Path("templates/comfyui")
 
 
 def export_comfyui_workflow(
     settings: AppSettings,
     character_id: str,
-    template_path: str | Path,
+    template_path: str | Path | None = None,
     output_path: str | Path | None = None,
     manifest_path: str | Path | None = None,
     lora_index: int = 0,
@@ -39,7 +44,7 @@ def export_comfyui_workflow(
         raise IndexError(f"lora_index out of range: {lora_index}")
 
     selected_lora = dict(loras[lora_index])
-    resolved_template = normalize_project_path(settings, template_path)
+    resolved_template = normalize_workflow_template_path(settings, template_path)
     workflow = json.loads(resolved_template.read_text(encoding="utf-8-sig"))
     tokens = build_placeholder_tokens(manifest, selected_lora)
     workflow = replace_placeholders(workflow, tokens)
@@ -60,8 +65,40 @@ def export_comfyui_workflow(
     return ComfyWorkflowExportResult(
         workflow_path=resolved_output,
         manifest_path=resolved_manifest,
+        template_path=resolved_template,
         lora_name=lora_name,
     )
+
+
+def list_comfyui_templates(settings: AppSettings) -> list[Path]:
+    template_dir = settings.project_root / COMFYUI_TEMPLATE_DIR
+    if not template_dir.exists():
+        return []
+    return sorted(path for path in template_dir.glob("*.json") if path.is_file())
+
+
+def normalize_workflow_template_path(
+    settings: AppSettings,
+    template_path: str | Path | None,
+) -> Path:
+    if template_path is None:
+        return settings.project_root / DEFAULT_COMFYUI_TEMPLATE
+
+    path = Path(template_path)
+    if path.is_absolute():
+        return path
+
+    candidates = [settings.project_root / path]
+    if len(path.parts) == 1:
+        template_dir = settings.project_root / COMFYUI_TEMPLATE_DIR
+        candidates.append(template_dir / path)
+        if path.suffix != ".json":
+            candidates.append(template_dir / f"{path}.json")
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def build_placeholder_tokens(
