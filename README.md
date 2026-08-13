@@ -24,6 +24,7 @@ AIを活用したアニメーション制作支援・学習・生成環境を構
 - Kohya_ss / sd-scripts向け低VRAM LoRA設定生成
 - LoRA設定・学習結果のCharacterProfile紐づけ
 - ComfyUI / Unity参照用LoRA manifest生成
+- ComfyUI workflow templateへのLoRA参照差し込み
 
 ## まず動かすもの
 
@@ -93,6 +94,7 @@ anime-lora-training/
 │     ├─ asset_inventory.py
 │     ├─ character_manager.py
 │     ├─ character_profile.py
+│     ├─ comfyui_workflow_export.py
 │     ├─ cli.py
 │     ├─ dataset_builder.py
 │     ├─ frame_extraction.py
@@ -109,6 +111,7 @@ anime-lora-training/
    ├─ test_asset_inventory.py
    ├─ test_character_manager.py
    ├─ test_character_profile.py
+   ├─ test_comfyui_workflow_export.py
    ├─ test_frame_extraction.py
    ├─ test_kohya_config.py
    ├─ test_lora_manifest.py
@@ -214,6 +217,20 @@ manifests/characters/sample_hero/lora_manifest.json
 ```
 
 manifestには、CharacterProfileのtrigger tag、登録済みLoRAモデルパス、ComfyUI向けのLoRA Loader用ヒント、Unity向けのaddressable key候補をまとめます。
+
+ComfyUI workflow templateへmanifest内のLoRA参照を差し込んだworkflowも出力できます。
+
+```powershell
+python -m anime_studio.cli comfyui export-workflow --character-id sample_hero --template templates/comfyui/draft.json
+```
+
+出力先:
+
+```text
+outputs/comfyui/sample_hero/draft_with_lora.json
+```
+
+template内の`LoraLoader`ノードには`lora_name`、`strength_model`、`strength_clip`を差し込みます。文字列内の`{{character_id}}`、`{{positive_prompt_tags}}`、`{{lora_name}}`、`{{lora_model_path}}`、`{{lora_weight}}`、`{{clip_weight}}`などのプレースホルダーも置換します。
 
 ## 6GB VRAM向け初期設定
 
@@ -390,6 +407,8 @@ manifestには、CharacterProfileのtrigger tag、登録済みLoRAモデルパ�
 また、生成済み設定と学習後のLoRAモデルをCharacterProfileへ紐づける台帳を追加しています。これにより、どの設定からどのLoRAが生まれたかをキャラクター単位で追跡できます。
 
 登録済みLoRAは軽量manifestとして書き出せるため、ComfyUIやUnity側ではProfileを直接解析せず、生成済みJSONを参照できます。
+
+さらに、manifestを使ってComfyUI workflow templateへLoRA参照を差し込むexport機能も追加しています。
 
 ### Phase 4: ショット制作
 

@@ -97,6 +97,42 @@ manifestには次を保存します。
 
 このmanifestは軽量なJSONなので、ComfyUI workflowやUnity側の生成リクエストから読み取りやすい形式です。
 
+## Export ComfyUI Workflow
+
+ComfyUI workflow templateへmanifest内のLoRA参照を差し込みます。
+
+```powershell
+python -m anime_studio.cli comfyui export-workflow --character-id sample_hero --template templates/comfyui/draft.json
+```
+
+生成されるファイル:
+
+```text
+outputs/comfyui/sample_hero/draft_with_lora.json
+```
+
+exportでは次を行います。
+
+- `manifests/characters/sample_hero/lora_manifest.json`を読み込む
+- `LoraLoader` / `LoraLoaderModelOnly`ノードへLoRA名とweightを設定する
+- template内のプレースホルダーを置換する
+- 置換済みworkflowを`outputs/comfyui/<character_id>/`へ保存する
+
+利用できる主なプレースホルダー:
+
+```text
+{{character_id}}
+{{display_name}}
+{{trigger_tags}}
+{{positive_prompt_tags}}
+{{artifact_id}}
+{{prompt_tag}}
+{{lora_name}}
+{{lora_model_path}}
+{{lora_weight}}
+{{clip_weight}}
+```
+
 ## Next Step
 
-次は、ComfyUI workflow templateへmanifest内のLoRA参照を差し込む小さなexport機能を追加します。
+次は、ComfyUI workflow templateの雛形をこのリポジトリ内に追加し、最小ドラフト生成の準備を進めます。

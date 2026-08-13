@@ -7,6 +7,7 @@ from pathlib import Path
 from .asset_inventory import collect_asset_inventory
 from .character_manager import register_character_asset
 from .character_profile import create_character_profile
+from .comfyui_workflow_export import export_comfyui_workflow
 from .dataset_builder import build_lora_dataset
 from .frame_extraction import build_frame_extraction_plan, extract_frames
 from .kohya_config import KohyaLowVramSettings, generate_kohya_low_vram_config
@@ -206,6 +207,34 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.75,
         help="Default LoRA and CLIP weight for downstream tools.",
     )
+
+    comfyui = subparsers.add_parser(
+        "comfyui",
+        help="Export ComfyUI workflow files from project metadata.",
+    )
+    comfyui_subparsers = comfyui.add_subparsers(dest="comfyui_command", required=True)
+    comfyui_export = comfyui_subparsers.add_parser(
+        "export-workflow",
+        help="Inject a registered LoRA into a ComfyUI workflow template.",
+    )
+    comfyui_export.add_argument("--character-id", required=True, help="Character id to export.")
+    comfyui_export.add_argument("--template", required=True, help="ComfyUI workflow template JSON.")
+    comfyui_export.add_argument(
+        "--output",
+        default=None,
+        help="Output workflow path. Defaults to outputs/comfyui/<id>/<template>_with_lora.json.",
+    )
+    comfyui_export.add_argument(
+        "--manifest",
+        default=None,
+        help="LoRA manifest path. Defaults to manifests/characters/<id>/lora_manifest.json.",
+    )
+    comfyui_export.add_argument(
+        "--lora-index",
+        type=int,
+        default=0,
+        help="Index of the LoRA entry to inject from the manifest.",
+    )
     return parser
 
 
@@ -364,6 +393,20 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"Wrote LoRA manifest: {result.manifest_path}")
         print(f"LoRA entries: {result.lora_count}")
+        return 0
+
+    if args.command == "comfyui" and args.comfyui_command == "export-workflow":
+        result = export_comfyui_workflow(
+            settings=settings,
+            character_id=args.character_id,
+            template_path=args.template,
+            output_path=args.output,
+            manifest_path=args.manifest,
+            lora_index=args.lora_index,
+        )
+        print(f"Wrote ComfyUI workflow: {result.workflow_path}")
+        print(f"Manifest: {result.manifest_path}")
+        print(f"LoRA: {result.lora_name}")
         return 0
 
     parser.error(f"Unknown command: {args.command}")
