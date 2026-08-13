@@ -75,6 +75,27 @@ python -m anime_studio.cli comfyui queue-refresh --job-id <job_id>
 
 `prompt_id`がComfyUI履歴に見つかると、ローカルキューのstatusが`completed`になります。
 
+## 6. 生成結果をCharacterProfile資産へ取り込む
+
+ComfyUIの出力フォルダを指定して、生成画像をキャラクターの`generated/comfyui/<job_id>/`へコピーします。
+
+```powershell
+python -m anime_studio.cli comfyui import-results --character-id sample_hero --job-id <job_id> --comfyui-output-dir C:/tools/ComfyUI/output
+```
+
+取り込み後は次の2か所に記録されます。
+
+```text
+assets/processed/characters/sample_hero/generated/comfyui/<job_id>/results.json
+assets/processed/characters/sample_hero/assets.json
+```
+
+画像ファイルをまだコピーできない環境では、ComfyUI履歴上の参照だけを記録できます。
+
+```powershell
+python -m anime_studio.cli comfyui import-results --character-id sample_hero --job-id <job_id> --comfyui-output-dir C:/tools/ComfyUI/output --metadata-only
+```
+
 ## 状態
 
 - `pending`: まだComfyUIへ送っていない
@@ -86,3 +107,4 @@ python -m anime_studio.cli comfyui queue-refresh --job-id <job_id>
 ## 注意
 
 ComfyUIで実行する前に、workflow内のcheckpoint名とLoRA名がComfyUI側から参照できることを確認してください。
+結果取り込みでは、ComfyUI履歴の`outputs -> images`に含まれる`filename`と`subfolder`を使って画像ファイルを探します。
