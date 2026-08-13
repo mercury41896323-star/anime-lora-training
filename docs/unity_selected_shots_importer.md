@@ -11,6 +11,7 @@
 ```text
 integrations/unity/Assets/AIAnimeStudio/Runtime/SelectedShotLibrary.cs
 integrations/unity/Assets/AIAnimeStudio/Editor/SelectedShotsManifestImporter.cs
+integrations/unity/Assets/AIAnimeStudio/Editor/SelectedShotsTimelineBuilder.cs
 ```
 
 Unity Project へは `integrations/unity/Assets/AIAnimeStudio` を `Assets/AIAnimeStudio` としてコピーします。
@@ -33,6 +34,10 @@ python -m anime_studio.storyboard_cli export-selected --story-id pilot_scene
 2. `selected_shots.json` を選びます。
 3. `Assets/AIAnimeStudio/Storyboards/<story_id>/SelectedShotLibrary.asset` が作成されます。
 4. 採用済み画像が見つかる場合は `Assets/AIAnimeStudio/ImportedShots/<story_id>/` にコピーされます。
+5. `SelectedShotLibrary.asset` を選択し、`AI Anime Studio > Create Timeline From Selected Shot Library` を実行します。
+6. `Assets/AIAnimeStudio/Timelines/<story_id>/` に Timeline asset が作られ、Scene に `PlayableDirector` 付きObjectが配置されます。
+
+Timeline生成には Unity の Timeline package が必要です。
 
 ## 生成される情報
 
@@ -47,7 +52,13 @@ python -m anime_studio.storyboard_cli export-selected --story-id pilot_scene
 - ライティング要約
 - 画像の場合の `Texture2D` プレビュー参照
 
+## Timeline自動配置
+
+Timeline Builder は、Shotごとに `ActivationTrack` を作り、`duration_seconds` に合わせてClipをShot順に配置します。
+
+画像プレビューがあるShotは `SpriteRenderer` 付きの子Objectとして配置し、画像がないShotは簡易 `TextMesh` を置きます。
+
 ## まだ作らないもの
 
-このサンプルでは、まだ Unity Timeline の自動生成やカメラ/ライト GameObject の生成は行いません。
-まずは `selected_shots.json` を安全に読んで、Unity側でShot一覧を確認できる状態を作るところまです。
+この段階では、カメラワークからCamera GameObjectを作る処理や、ライティング情報からLightを自動配置する処理はまだ行いません。
+まずは採用済みShotをUnity Timeline上に時間順で並べ、編集開始できる足場を作るところまでです。

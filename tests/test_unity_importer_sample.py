@@ -11,9 +11,11 @@ class UnityImporterSampleTest(unittest.TestCase):
     def test_unity_importer_reads_selected_shots_manifest_shape(self) -> None:
         runtime = ROOT / "integrations" / "unity" / "Assets" / "AIAnimeStudio" / "Runtime" / "SelectedShotLibrary.cs"
         editor = ROOT / "integrations" / "unity" / "Assets" / "AIAnimeStudio" / "Editor" / "SelectedShotsManifestImporter.cs"
+        timeline = ROOT / "integrations" / "unity" / "Assets" / "AIAnimeStudio" / "Editor" / "SelectedShotsTimelineBuilder.cs"
 
         runtime_text = runtime.read_text(encoding="utf-8")
         editor_text = editor.read_text(encoding="utf-8")
+        timeline_text = timeline.read_text(encoding="utf-8")
 
         self.assertIn("public sealed class SelectedShotLibrary", runtime_text)
         self.assertIn("public sealed class SelectedShotClip", runtime_text)
@@ -26,6 +28,12 @@ class UnityImporterSampleTest(unittest.TestCase):
         self.assertIn("lighting_setup", editor_text)
         self.assertIn("Assets/AIAnimeStudio/Storyboards/", editor_text)
         self.assertIn("Assets/AIAnimeStudio/ImportedShots/", editor_text)
+        self.assertIn("public static PlayableDirector CreateTimeline", timeline_text)
+        self.assertIn("TimelineAsset", timeline_text)
+        self.assertIn("ActivationTrack", timeline_text)
+        self.assertIn("CreateDefaultClip", timeline_text)
+        self.assertIn("durationSeconds", timeline_text)
+        self.assertIn("Assets/AIAnimeStudio/Timelines/", timeline_text)
 
 
 if __name__ == "__main__":
