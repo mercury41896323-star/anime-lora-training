@@ -30,9 +30,14 @@ class StoryboardTest(unittest.TestCase):
                 title="Opening close-up",
                 character_id="sample_hero",
                 prompt="sample_hero, close-up, soft light",
+                negative_prompt="blurry, low quality",
                 duration_seconds=2.5,
                 camera="close-up",
                 lighting="soft light",
+                seed=12345,
+                width=640,
+                height=384,
+                steps=18,
             )
             add_shot(
                 settings=settings,
@@ -45,7 +50,12 @@ class StoryboardTest(unittest.TestCase):
             self.assertTrue(storyboard_path.exists())
             self.assertEqual([shot.order for shot in shots], [1, 2])
             self.assertEqual(shots[0].character_id, "sample_hero")
+            self.assertEqual(shots[0].negative_prompt, "blurry, low quality")
             self.assertEqual(shots[0].duration_seconds, 2.5)
+            self.assertEqual(shots[0].seed, 12345)
+            self.assertEqual(shots[0].width, 640)
+            self.assertEqual(shots[0].height, 384)
+            self.assertEqual(shots[0].steps, 18)
             self.assertEqual(shots[1].title, "Wide reveal")
 
     def test_rejects_duplicate_shot_id(self) -> None:

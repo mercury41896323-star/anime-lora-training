@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from anime_studio.character_profile import create_character_profile
 from anime_studio.settings import load_settings
 from anime_studio.storyboard import add_shot, create_storyboard
+from anime_studio.storyboard_editor import write_storyboard_editor
 from anime_studio.storyboard_editor_manifest import export_selected_shot_manifest
 from anime_studio.storyboard_results import (
     link_comfyui_results_to_storyboard,
@@ -62,6 +63,11 @@ class StoryboardResultsTest(unittest.TestCase):
                 shot_id="shot_001",
                 title="Opening",
                 prompt="soft light",
+                negative_prompt="blurry",
+                seed=12345,
+                width=640,
+                height=384,
+                steps=18,
             )
             add_shot(
                 settings=settings,
@@ -95,7 +101,9 @@ class StoryboardResultsTest(unittest.TestCase):
             results = read_raw_shot_results(settings, "pilot_scene")
             preview = write_storyboard_preview(settings, "pilot_scene")
             exported = export_selected_shot_manifest(settings, "pilot_scene")
+            editor = write_storyboard_editor(settings, "pilot_scene")
             html = preview.preview_path.read_text(encoding="utf-8")
+            editor_html = editor.editor_path.read_text(encoding="utf-8")
             manifest = json.loads(exported.manifest_path.read_text(encoding="utf-8"))
 
             decisions = {str(result["result_id"]): str(result.get("decision", "candidate")) for result in results}
@@ -111,7 +119,15 @@ class StoryboardResultsTest(unittest.TestCase):
             self.assertEqual(manifest["shots"][0]["shot_id"], "shot_001")
             self.assertEqual(manifest["shots"][0]["selected_result"]["stored_path"], "outputs/manual/opening_b.png")
             self.assertEqual(manifest["shots"][0]["unity"]["timeline_clip_name"], "001_shot_001")
+            self.assertEqual(manifest["shots"][0]["negative_prompt"], "blurry")
+            self.assertEqual(manifest["shots"][0]["seed"], 12345)
+            self.assertEqual(manifest["shots"][0]["unity"]["width"], 640)
             self.assertEqual(manifest["missing_shots"][0]["shot_id"], "shot_002")
+            self.assertEqual(editor.shot_count, 2)
+            self.assertEqual(editor.selected_count, 1)
+            self.assertEqual(editor.missing_count, 1)
+            self.assertIn("Shot Editor", editor_html)
+            self.assertIn("opening_b.png", editor_html)
 
     def test_links_imported_comfyui_result_using_workflow_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

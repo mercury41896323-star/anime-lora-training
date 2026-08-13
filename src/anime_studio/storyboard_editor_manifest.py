@@ -89,8 +89,13 @@ def render_selected_shot(story_id: str, shot: Shot, result: dict[str, Any]) -> d
         "character_id": shot.character_id,
         "duration_seconds": shot.duration_seconds,
         "prompt": shot.prompt,
+        "negative_prompt": shot.negative_prompt,
         "camera": shot.camera,
         "lighting": shot.lighting,
+        "seed": shot.seed,
+        "width": shot.width,
+        "height": shot.height,
+        "steps": shot.steps,
         "notes": shot.notes,
         "selected_result": {
             "result_id": result_id,
@@ -110,6 +115,8 @@ def render_selected_shot(story_id: str, shot: Shot, result: dict[str, Any]) -> d
             "asset_reference": stored_path,
             "addressable_key": f"storyboards/{story_id}/{shot.shot_id}/{result_id}",
             "duration_seconds": shot.duration_seconds,
+            "width": shot.width,
+            "height": shot.height,
         },
         "editor": {
             "label": f"{shot.order:03d} {shot.title}",
@@ -124,6 +131,8 @@ def render_missing_shot(shot: Shot) -> dict[str, Any]:
         "order": shot.order,
         "title": shot.title,
         "character_id": shot.character_id,
+        "prompt": shot.prompt,
+        "negative_prompt": shot.negative_prompt,
         "reason": "No selected shot result.",
     }
 

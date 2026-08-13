@@ -146,11 +146,25 @@ def inject_shot_context(workflow: dict[str, Any], storyboard: Storyboard, shot: 
         base_prompt = str(inputs.get("text", ""))
         inputs["text"] = build_shot_prompt(base_prompt, shot)
 
+    negative_node = find_negative_prompt_node(workflow)
+    if negative_node is not None and shot.negative_prompt.strip():
+        inputs = negative_node.setdefault("inputs", {})
+        base_prompt = str(inputs.get("text", ""))
+        inputs["text"] = build_shot_negative_prompt(base_prompt, shot)
+
     for node in iter_comfyui_nodes(workflow):
         if node.get("class_type") == "KSampler":
             inputs = node.setdefault("inputs", {})
             if "seed" in inputs:
-                inputs["seed"] = stable_shot_seed(storyboard.story_id, shot.shot_id)
+                inputs["seed"] = shot.seed if shot.seed is not None else stable_shot_seed(storyboard.story_id, shot.shot_id)
+            if "steps" in inputs and shot.steps is not None:
+                inputs["steps"] = shot.steps
+        if node.get("class_type") == "EmptyLatentImage":
+            inputs = node.setdefault("inputs", {})
+            if "width" in inputs and shot.width is not None:
+                inputs["width"] = shot.width
+            if "height" in inputs and shot.height is not None:
+                inputs["height"] = shot.height
         if node.get("class_type") == "SaveImage":
             inputs = node.setdefault("inputs", {})
             inputs["filename_prefix"] = (
@@ -168,9 +182,14 @@ def inject_shot_context(workflow: dict[str, Any], storyboard: Storyboard, shot: 
             "shot_title": shot.title,
             "shot_character_id": shot.character_id,
             "shot_prompt": shot.prompt,
+            "shot_negative_prompt": shot.negative_prompt,
             "shot_duration_seconds": shot.duration_seconds,
             "shot_camera": shot.camera,
             "shot_lighting": shot.lighting,
+            "shot_seed": shot.seed,
+            "shot_width": shot.width,
+            "shot_height": shot.height,
+            "shot_steps": shot.steps,
             "shot_notes": shot.notes,
         }
     )
@@ -189,6 +208,11 @@ def build_shot_prompt(base_prompt: str, shot: Shot) -> str:
     for part in shot_parts:
         if part and part not in parts:
             parts.append(part)
+    return ", ".join(part for part in parts if part)
+
+
+def build_shot_negative_prompt(base_prompt: str, shot: Shot) -> str:
+    parts = [base_prompt.strip(), shot.negative_prompt.strip()]
     return ", ".join(part for part in parts if part)
 
 
@@ -212,6 +236,30 @@ def find_positive_prompt_node(workflow: dict[str, Any]) -> dict[str, Any] | None
             continue
         text = str(node.get("inputs", {}).get("text", "")).lower()
         if "worst quality" not in text and "negative" not in text:
+            return node
+    return None
+
+
+def find_negative_prompt_node(workflow: dict[str, Any]) -> dict[str, Any] | None:
+    nodes_by_id = {
+        key: value
+        for key, value in workflow.items()
+        if isinstance(value, dict) and isinstance(value.get("inputs"), dict)
+    }
+    for node in nodes_by_id.values():
+        if node.get("class_type") != "KSampler":
+            continue
+        negative_link = node.get("inputs", {}).get("negative")
+        if isinstance(negative_link, list) and negative_link:
+            negative_node = nodes_by_id.get(str(negative_link[0]))
+            if negative_node and negative_node.get("class_type") == "CLIPTextEncode":
+                return negative_node
+
+    for node in nodes_by_id.values():
+        if node.get("class_type") != "CLIPTextEncode":
+            continue
+        text = str(node.get("inputs", {}).get("text", "")).lower()
+        if "worst quality" in text or "negative" in text:
             return node
     return None
 

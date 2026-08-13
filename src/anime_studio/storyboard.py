@@ -20,9 +20,14 @@ class Shot:
     title: str
     character_id: str = ""
     prompt: str = ""
+    negative_prompt: str = ""
     duration_seconds: float = 3.0
     camera: str = ""
     lighting: str = ""
+    seed: int | None = None
+    width: int | None = None
+    height: int | None = None
+    steps: int | None = None
     notes: str = ""
 
 
@@ -57,14 +62,23 @@ def add_shot(
     title: str,
     character_id: str = "",
     prompt: str = "",
+    negative_prompt: str = "",
     duration_seconds: float = 3.0,
     camera: str = "",
     lighting: str = "",
+    seed: int | None = None,
+    width: int | None = None,
+    height: int | None = None,
+    steps: int | None = None,
     notes: str = "",
 ) -> Path:
     validate_story_id(shot_id)
     if character_id:
         validate_character_id(character_id)
+    validate_optional_positive_int(seed, "seed")
+    validate_optional_positive_int(width, "width")
+    validate_optional_positive_int(height, "height")
+    validate_optional_positive_int(steps, "steps")
     storyboard = load_storyboard(settings, story_id)
     if any(shot.shot_id == shot_id for shot in storyboard.shots):
         raise ValueError(f"Shot already exists: {shot_id}")
@@ -74,9 +88,14 @@ def add_shot(
         title=title,
         character_id=character_id,
         prompt=prompt,
+        negative_prompt=negative_prompt,
         duration_seconds=duration_seconds,
         camera=camera,
         lighting=lighting,
+        seed=seed,
+        width=width,
+        height=height,
+        steps=steps,
         notes=notes,
     )
     updated = Storyboard(
@@ -128,9 +147,14 @@ def shot_from_dict(data: dict[str, object]) -> Shot:
         title=str(data["title"]),
         character_id=str(data.get("character_id", "")),
         prompt=str(data.get("prompt", "")),
+        negative_prompt=str(data.get("negative_prompt", "")),
         duration_seconds=float(data.get("duration_seconds", 3.0)),
         camera=str(data.get("camera", "")),
         lighting=str(data.get("lighting", "")),
+        seed=optional_int(data.get("seed")),
+        width=optional_int(data.get("width")),
+        height=optional_int(data.get("height")),
+        steps=optional_int(data.get("steps")),
         notes=str(data.get("notes", "")),
     )
 
@@ -141,3 +165,14 @@ def validate_story_id(value: str) -> None:
             "story_id and shot_id must be 2-63 chars using lowercase letters, "
             "numbers, hyphens, or underscores."
         )
+
+
+def optional_int(value: object) -> int | None:
+    if value is None or value == "":
+        return None
+    return int(value)
+
+
+def validate_optional_positive_int(value: int | None, name: str) -> None:
+    if value is not None and value <= 0:
+        raise ValueError(f"{name} must be a positive integer.")

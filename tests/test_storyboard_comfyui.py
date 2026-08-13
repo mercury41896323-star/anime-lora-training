@@ -43,8 +43,13 @@ class StoryboardComfyUITest(unittest.TestCase):
                 title="Opening close-up",
                 character_id="sample_hero",
                 prompt="sample_hero, close-up, hopeful smile",
+                negative_prompt="blurry, low quality",
                 camera="close-up",
                 lighting="soft morning light",
+                seed=12345,
+                width=640,
+                height=384,
+                steps=18,
             )
             add_shot(
                 settings=settings,
@@ -69,12 +74,18 @@ class StoryboardComfyUITest(unittest.TestCase):
             self.assertIn("hopeful smile", prompt)
             self.assertIn("close-up", prompt)
             self.assertIn("soft morning light", prompt)
+            self.assertIn("blurry", workflow["4"]["inputs"]["text"])
+            self.assertEqual(workflow["6"]["inputs"]["seed"], 12345)
+            self.assertEqual(workflow["6"]["inputs"]["steps"], 18)
+            self.assertEqual(workflow["5"]["inputs"]["width"], 640)
+            self.assertEqual(workflow["5"]["inputs"]["height"], 384)
             self.assertEqual(
                 workflow["8"]["inputs"]["filename_prefix"],
                 "anime_studio/storyboards/pilot_scene/001_shot_001",
             )
             self.assertEqual(workflow["meta"]["story_id"], "pilot_scene")
             self.assertEqual(workflow["meta"]["shot_id"], "shot_001")
+            self.assertEqual(workflow["meta"]["shot_seed"], 12345)
             self.assertTrue(result.manifest_path.exists())
 
     def test_can_enqueue_exported_workflows(self) -> None:
