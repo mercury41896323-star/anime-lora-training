@@ -1,0 +1,111 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sd15.safetensors"
+    }
+  },
+  "2": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "clip": [
+        "1",
+        1
+      ],
+      "lora_name": "{{lora_name}}",
+      "strength_model": "{{lora_weight}}",
+      "strength_clip": "{{clip_weight}}"
+    }
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "2",
+        1
+      ],
+      "text": "masterpiece, best quality, anime style, {{positive_prompt_tags}}"
+    }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "2",
+        1
+      ],
+      "text": "lowres, bad anatomy, worst quality, blurry"
+    }
+  },
+  "5": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 512,
+      "height": 512,
+      "batch_size": 1
+    }
+  },
+  "6": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 1,
+      "steps": 20,
+      "cfg": 7,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1,
+      "model": [
+        "2",
+        0
+      ],
+      "positive": [
+        "3",
+        0
+      ],
+      "negative": [
+        "4",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    }
+  },
+  "7": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "6",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    }
+  },
+  "8": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "anime_studio/{{character_id}}/{{artifact_id}}",
+      "images": [
+        "7",
+        0
+      ]
+    }
+  },
+  "meta": {
+    "template": "sd15_lora_txt2img_512",
+    "description": "Minimal SD1.5 txt2img workflow for RTX 3050 6GB LoRA checks.",
+    "character_id": "{{character_id}}",
+    "display_name": "{{display_name}}",
+    "lora_name": "{{lora_name}}",
+    "lora_model_path": "{{lora_model_path}}",
+    "prompt_tag": "{{prompt_tag}}"
+  }
+}
