@@ -23,6 +23,7 @@ AIを活用したアニメーション制作支援・学習・生成環境を構
 - LoRA学習用データセット生成
 - Kohya_ss / sd-scripts向け低VRAM LoRA設定生成
 - LoRA設定・学習結果のCharacterProfile紐づけ
+- ComfyUI / Unity参照用LoRA manifest生成
 
 ## まず動かすもの
 
@@ -96,6 +97,7 @@ anime-lora-training/
 │     ├─ dataset_builder.py
 │     ├─ frame_extraction.py
 │     ├─ kohya_config.py
+│     ├─ lora_manifest.py
 │     ├─ lora_registry.py
 │     ├─ tagger.py
 │     ├─ wd14_provider.py
@@ -109,6 +111,7 @@ anime-lora-training/
    ├─ test_character_profile.py
    ├─ test_frame_extraction.py
    ├─ test_kohya_config.py
+   ├─ test_lora_manifest.py
    ├─ test_lora_registry.py
    ├─ test_settings.py
    └─ test_tagger_and_dataset.py
@@ -197,6 +200,20 @@ python -m anime_studio.cli lora list --character-id sample_hero
 ```
 
 `lora_files`には既存ツールと連携しやすいモデルパス一覧を残し、`lora_artifacts`には設定ファイル、実行スクリプト、学習結果、状態、メモをまとめます。
+
+登録済みLoRAをComfyUIやUnity側から参照するための軽量manifestも生成できます。
+
+```powershell
+python -m anime_studio.cli lora manifest --character-id sample_hero --weight 0.75
+```
+
+出力先:
+
+```text
+manifests/characters/sample_hero/lora_manifest.json
+```
+
+manifestには、CharacterProfileのtrigger tag、登録済みLoRAモデルパス、ComfyUI向けのLoRA Loader用ヒント、Unity向けのaddressable key候補をまとめます。
 
 ## 6GB VRAM向け初期設定
 
@@ -371,6 +388,8 @@ python -m anime_studio.cli lora list --character-id sample_hero
 現在は、1の入口として低VRAM LoRA設定ファイル生成を追加しています。実際の学習実行は、設定内容を確認してから手動で開始する方針です。
 
 また、生成済み設定と学習後のLoRAモデルをCharacterProfileへ紐づける台帳を追加しています。これにより、どの設定からどのLoRAが生まれたかをキャラクター単位で追跡できます。
+
+登録済みLoRAは軽量manifestとして書き出せるため、ComfyUIやUnity側ではProfileを直接解析せず、生成済みJSONを参照できます。
 
 ### Phase 4: ショット制作
 

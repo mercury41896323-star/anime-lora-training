@@ -10,6 +10,7 @@ from .character_profile import create_character_profile
 from .dataset_builder import build_lora_dataset
 from .frame_extraction import build_frame_extraction_plan, extract_frames
 from .kohya_config import KohyaLowVramSettings, generate_kohya_low_vram_config
+from .lora_manifest import generate_lora_manifest
 from .lora_registry import list_lora_artifacts, register_lora_result
 from .settings import load_settings
 from .tagger import finalize_tag_sidecars, generate_auto_tag_records, update_manual_tags
@@ -189,6 +190,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="List LoRA configs and results linked to a CharacterProfile.",
     )
     lora_list.add_argument("--character-id", required=True, help="Character id to inspect.")
+    lora_manifest = lora_subparsers.add_parser(
+        "manifest",
+        help="Generate a lightweight LoRA manifest for ComfyUI and Unity.",
+    )
+    lora_manifest.add_argument("--character-id", required=True, help="Character id to export.")
+    lora_manifest.add_argument(
+        "--output",
+        default=None,
+        help="Manifest output path. Defaults to manifests/characters/<id>/lora_manifest.json.",
+    )
+    lora_manifest.add_argument(
+        "--weight",
+        type=float,
+        default=0.75,
+        help="Default LoRA and CLIP weight for downstream tools.",
+    )
     return parser
 
 
@@ -336,6 +353,17 @@ def main(argv: list[str] | None = None) -> int:
         for artifact in artifacts:
             target = artifact.model_path or artifact.config_dir
             print(f"{artifact.artifact_id}: {artifact.kind} / {artifact.status} / {target}")
+        return 0
+
+    if args.command == "lora" and args.lora_command == "manifest":
+        result = generate_lora_manifest(
+            settings=settings,
+            character_id=args.character_id,
+            output_path=args.output,
+            default_weight=args.weight,
+        )
+        print(f"Wrote LoRA manifest: {result.manifest_path}")
+        print(f"LoRA entries: {result.lora_count}")
         return 0
 
     parser.error(f"Unknown command: {args.command}")

@@ -73,6 +73,30 @@ python -m anime_studio.cli lora list --character-id sample_hero
 
 `profile.json`の`lora_files`にはモデルパス一覧を保存し、`lora_artifacts`には設定・結果・状態・メモを保存します。
 
+## Export Runtime Manifest
+
+登録済みLoRAをComfyUIやUnity側から参照しやすい軽量manifestへ書き出します。
+
+```powershell
+python -m anime_studio.cli lora manifest --character-id sample_hero --weight 0.75
+```
+
+生成されるファイル:
+
+```text
+manifests/characters/sample_hero/lora_manifest.json
+```
+
+manifestには次を保存します。
+
+- CharacterProfileの`character_id`、表示名、trigger tag
+- 登録済み`.safetensors`のプロジェクト相対パス
+- ComfyUI向けのLoRA Loader用ヒントとpositive prompt tag
+- Unity向けのaddressable key候補
+- downstream toolで使うLoRA weight / clip weight
+
+このmanifestは軽量なJSONなので、ComfyUI workflowやUnity側の生成リクエストから読み取りやすい形式です。
+
 ## Next Step
 
-次は、登録済みLoRAをComfyUIやUnity側の制作設定から参照するための軽量なmanifestを追加します。
+次は、ComfyUI workflow templateへmanifest内のLoRA参照を差し込む小さなexport機能を追加します。
