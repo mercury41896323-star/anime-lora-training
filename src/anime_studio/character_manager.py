@@ -15,6 +15,8 @@ class RegisteredAsset:
     stored_path: str
     kind: str
     size_bytes: int
+    source: str = "manual"
+    metadata: dict[str, object] | None = None
 
 
 def register_character_asset(
