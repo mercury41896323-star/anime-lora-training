@@ -1,7 +1,7 @@
 # Storyboard / Shot Management
 
-Storyboard は、キャラクター・LoRA・ComfyUI workflow を「カット単位」でつなぐための軽量管理ファイルです。
-まだ映像編集ツールではなく、RTX 3050 6GB 環境で破綻しにくい最小の制作台帳として扱います。
+Storyboard は、キャラクター・LoRA・ComfyUI workflow・生成結果を「カット単位」でつなぐための軽量な制作台帳です。
+まだ映像編集ツールではなく、RTX 3050 6GB 環境でも扱いやすい最小構成を目指します。
 
 ## Storyboard を作る
 
@@ -83,9 +83,50 @@ queues/comfyui/jobs.json
 python -m anime_studio.cli comfyui queue-submit --job-id <job_id>
 ```
 
+## Shot へ生成結果を紐づける
+
+手動で画像や動画を Shot に紐づける場合:
+
+```powershell
+python -m anime_studio.cli storyboard link-result --story-id pilot_scene --shot-id shot_001 --result outputs/manual/opening.png
+```
+
+ComfyUI から取り込んだ結果を、workflow metadata の `story_id` / `shot_id` を使って自動で紐づける場合:
+
+```powershell
+python -m anime_studio.cli storyboard link-comfyui-results --job-id <job_id>
+```
+
+出力先:
+
+```text
+storyboards/pilot_scene/shot_results.json
+```
+
+同じ結果を再登録しようとした場合は重複としてスキップされます。
+
+## Shot の生成結果を一覧する
+
+```powershell
+python -m anime_studio.cli storyboard results --story-id pilot_scene
+```
+
+特定 Shot だけ見る場合:
+
+```powershell
+python -m anime_studio.cli storyboard results --story-id pilot_scene --shot-id shot_001
+```
+
+JSON で確認する場合:
+
+```powershell
+python -m anime_studio.cli storyboard results --story-id pilot_scene --json
+```
+
 ## 次の拡張候補
 
+- Shot ごとの採用結果フラグ
 - Shot ごとの negative prompt
 - Shot ごとの seed / width / height / steps
-- Shot 生成結果の自動インポート
+- Shot 生成結果のプレビューHTML
 - Unity Timeline 向け manifest 出力
