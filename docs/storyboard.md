@@ -105,6 +105,28 @@ storyboards/pilot_scene/shot_results.json
 
 同じ結果を再登録しようとした場合は重複としてスキップされます。
 
+## Shot 結果を採用・保留・没にする
+
+Shot result は次の 3 状態を持ちます。
+
+- `candidate`: 候補
+- `selected`: 採用
+- `rejected`: 没
+
+採用する場合:
+
+```powershell
+python -m anime_studio.storyboard_cli decide-result --story-id pilot_scene --result-id shot_001-xxxxxxxxxx --decision selected --notes "表情がよい"
+```
+
+没にする場合:
+
+```powershell
+python -m anime_studio.storyboard_cli decide-result --story-id pilot_scene --result-id shot_001-xxxxxxxxxx --decision rejected --notes "構図が弱い"
+```
+
+同じ Shot で別の結果を `selected` にすると、以前の採用結果は自動で `candidate` に戻ります。
+
 ## Shot の生成結果を一覧する
 
 ```powershell
@@ -123,10 +145,23 @@ JSON で確認する場合:
 python -m anime_studio.storyboard_cli results --story-id pilot_scene --json
 ```
 
+## Storyboard プレビュー HTML を作る
+
+Shot ごとの候補・採用・没をブラウザで確認できる軽量 HTML を書き出します。
+
+```powershell
+python -m anime_studio.storyboard_cli preview --story-id pilot_scene
+```
+
+出力先:
+
+```text
+storyboards/pilot_scene/preview.html
+```
+
 ## 次の拡張候補
 
-- Shot ごとの採用結果フラグ
 - Shot ごとの negative prompt
 - Shot ごとの seed / width / height / steps
-- Shot 生成結果のプレビューHTML
-- Unity Timeline 向け manifest 出力
+- 採用結果だけを Unity Timeline manifest へ出力
+- ShotEditor UI
