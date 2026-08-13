@@ -15,6 +15,7 @@ from anime_studio.lora_registry import register_lora_result
 from anime_studio.settings import load_settings
 from anime_studio.storyboard import add_shot, create_storyboard
 from anime_studio.storyboard_comfyui import export_storyboard_comfyui_workflows
+from anime_studio.storyboard_production import set_camera_work, set_lighting_setup
 
 
 class StoryboardComfyUITest(unittest.TestCase):
@@ -51,6 +52,21 @@ class StoryboardComfyUITest(unittest.TestCase):
                 height=384,
                 steps=18,
             )
+            set_camera_work(
+                settings=settings,
+                story_id="pilot_scene",
+                shot_id="shot_001",
+                framing="close-up",
+                movement="slow dolly in",
+                lens_mm=35,
+            )
+            set_lighting_setup(
+                settings=settings,
+                story_id="pilot_scene",
+                shot_id="shot_001",
+                key_light="soft key light",
+                mood="warm hopeful mood",
+            )
             add_shot(
                 settings=settings,
                 story_id="pilot_scene",
@@ -74,6 +90,8 @@ class StoryboardComfyUITest(unittest.TestCase):
             self.assertIn("hopeful smile", prompt)
             self.assertIn("close-up", prompt)
             self.assertIn("soft morning light", prompt)
+            self.assertIn("slow dolly in", prompt)
+            self.assertIn("warm hopeful mood", prompt)
             self.assertIn("blurry", workflow["4"]["inputs"]["text"])
             self.assertEqual(workflow["6"]["inputs"]["seed"], 12345)
             self.assertEqual(workflow["6"]["inputs"]["steps"], 18)
@@ -86,6 +104,8 @@ class StoryboardComfyUITest(unittest.TestCase):
             self.assertEqual(workflow["meta"]["story_id"], "pilot_scene")
             self.assertEqual(workflow["meta"]["shot_id"], "shot_001")
             self.assertEqual(workflow["meta"]["shot_seed"], 12345)
+            self.assertEqual(workflow["meta"]["shot_camera_work"]["movement"], "slow dolly in")
+            self.assertEqual(workflow["meta"]["shot_lighting_setup"]["mood"], "warm hopeful mood")
             self.assertTrue(result.manifest_path.exists())
 
     def test_can_enqueue_exported_workflows(self) -> None:

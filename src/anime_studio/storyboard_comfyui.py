@@ -11,6 +11,13 @@ from .comfyui_workflow_export import export_comfyui_workflow
 from .lora_registry import project_relative_path, utc_timestamp
 from .settings import AppSettings
 from .storyboard import Shot, Storyboard, load_storyboard
+from .storyboard_production import (
+    CameraWork,
+    LightingSetup,
+    build_production_prompt,
+    load_camera_work_map,
+    load_lighting_setup_map,
+)
 
 
 @dataclass(frozen=True)
@@ -50,6 +57,8 @@ def export_storyboard_comfyui_workflows(
     queue_path: str | Path | None = None,
 ) -> StoryboardWorkflowExportResult:
     storyboard = load_storyboard(settings, story_id)
+    camera_by_shot = load_camera_work_map(settings, story_id)
+    lighting_by_shot = load_lighting_setup_map(settings, story_id)
     resolved_output_dir = normalize_output_dir(settings, story_id, output_dir)
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -75,7 +84,13 @@ def export_storyboard_comfyui_workflows(
                 lora_index=lora_index,
             )
             workflow = json.loads(workflow_path.read_text(encoding="utf-8-sig"))
-            workflow = inject_shot_context(workflow, storyboard, shot)
+            workflow = inject_shot_context(
+                workflow,
+                storyboard,
+                shot,
+                camera_by_shot.get(shot.shot_id),
+                lighting_by_shot.get(shot.shot_id),
+            )
             workflow_path.write_text(
                 json.dumps(workflow, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
@@ -139,12 +154,18 @@ def export_storyboard_comfyui_workflows(
     )
 
 
-def inject_shot_context(workflow: dict[str, Any], storyboard: Storyboard, shot: Shot) -> dict[str, Any]:
+def inject_shot_context(
+    workflow: dict[str, Any],
+    storyboard: Storyboard,
+    shot: Shot,
+    camera: CameraWork | None = None,
+    lighting: LightingSetup | None = None,
+) -> dict[str, Any]:
     positive_node = find_positive_prompt_node(workflow)
     if positive_node is not None:
         inputs = positive_node.setdefault("inputs", {})
         base_prompt = str(inputs.get("text", ""))
-        inputs["text"] = build_shot_prompt(base_prompt, shot)
+        inputs["text"] = build_shot_prompt(base_prompt, shot, camera, lighting)
 
     negative_node = find_negative_prompt_node(workflow)
     if negative_node is not None and shot.negative_prompt.strip():
@@ -186,6 +207,8 @@ def inject_shot_context(workflow: dict[str, Any], storyboard: Storyboard, shot: 
             "shot_duration_seconds": shot.duration_seconds,
             "shot_camera": shot.camera,
             "shot_lighting": shot.lighting,
+            "shot_camera_work": camera.__dict__ if camera else {},
+            "shot_lighting_setup": lighting.__dict__ if lighting else {},
             "shot_seed": shot.seed,
             "shot_width": shot.width,
             "shot_height": shot.height,
@@ -196,16 +219,15 @@ def inject_shot_context(workflow: dict[str, Any], storyboard: Storyboard, shot: 
     return workflow
 
 
-def build_shot_prompt(base_prompt: str, shot: Shot) -> str:
+def build_shot_prompt(
+    base_prompt: str,
+    shot: Shot,
+    camera: CameraWork | None = None,
+    lighting: LightingSetup | None = None,
+) -> str:
     parts = [base_prompt.strip()]
-    shot_parts = [
-        shot.prompt.strip(),
-        shot.camera.strip(),
-        shot.lighting.strip(),
-    ]
-    if not shot.prompt.strip():
-        shot_parts.insert(0, shot.title.strip())
-    for part in shot_parts:
+    production_prompt = build_production_prompt(shot, camera, lighting)
+    for part in [production_prompt]:
         if part and part not in parts:
             parts.append(part)
     return ", ".join(part for part in parts if part)

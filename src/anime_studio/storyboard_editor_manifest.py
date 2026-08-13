@@ -8,6 +8,7 @@ from typing import Any
 from .lora_registry import utc_timestamp
 from .settings import AppSettings
 from .storyboard import Shot, get_storyboard_path, load_storyboard
+from .storyboard_production import CameraWork, LightingSetup, load_camera_work_map, load_lighting_setup_map
 from .storyboard_review import read_raw_shot_results, result_decision
 
 
@@ -25,10 +26,18 @@ def export_selected_shot_manifest(
 ) -> StoryboardEditorManifestResult:
     storyboard = load_storyboard(settings, story_id)
     results = read_raw_shot_results(settings, story_id)
+    camera_by_shot = load_camera_work_map(settings, story_id)
+    lighting_by_shot = load_lighting_setup_map(settings, story_id)
     selected_by_shot = select_results_by_shot(results)
     ordered_shots = sorted(storyboard.shots, key=lambda item: item.order)
     selected_shots = [
-        render_selected_shot(story_id, shot, selected_by_shot[shot.shot_id])
+        render_selected_shot(
+            story_id,
+            shot,
+            selected_by_shot[shot.shot_id],
+            camera_by_shot.get(shot.shot_id),
+            lighting_by_shot.get(shot.shot_id),
+        )
         for shot in ordered_shots
         if shot.shot_id in selected_by_shot
     ]
@@ -79,7 +88,13 @@ def select_results_by_shot(results: list[dict[str, Any]]) -> dict[str, dict[str,
     return selected
 
 
-def render_selected_shot(story_id: str, shot: Shot, result: dict[str, Any]) -> dict[str, Any]:
+def render_selected_shot(
+    story_id: str,
+    shot: Shot,
+    result: dict[str, Any],
+    camera: CameraWork | None = None,
+    lighting: LightingSetup | None = None,
+) -> dict[str, Any]:
     result_id = str(result.get("result_id", ""))
     stored_path = str(result.get("stored_path", ""))
     return {
@@ -97,6 +112,8 @@ def render_selected_shot(story_id: str, shot: Shot, result: dict[str, Any]) -> d
         "height": shot.height,
         "steps": shot.steps,
         "notes": shot.notes,
+        "camera_work": camera.__dict__ if camera else {},
+        "lighting_setup": lighting.__dict__ if lighting else {},
         "selected_result": {
             "result_id": result_id,
             "kind": str(result.get("kind", "")),

@@ -12,6 +12,11 @@ from .storyboard_results import (
 )
 from .storyboard_editor import write_storyboard_editor
 from .storyboard_editor_manifest import export_selected_shot_manifest
+from .storyboard_production import (
+    build_draft_generation_plan,
+    set_camera_work,
+    set_lighting_setup,
+)
 from .storyboard_review import (
     set_shot_result_decision,
     write_storyboard_preview,
@@ -62,6 +67,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     list_shots.add_argument("--story-id", required=True, help="Storyboard id.")
     list_shots.add_argument("--json", action="store_true", help="Print full JSON records.")
+
+    camera = subparsers.add_parser(
+        "camera",
+        help="Set camera work notes for a storyboard shot.",
+    )
+    camera.add_argument("--story-id", required=True, help="Storyboard id.")
+    camera.add_argument("--shot-id", required=True, help="Shot id.")
+    camera.add_argument("--framing", default="", help="Framing note, such as close-up or wide shot.")
+    camera.add_argument("--movement", default="", help="Camera movement note.")
+    camera.add_argument("--lens-mm", type=int, default=None, help="Optional lens focal length.")
+    camera.add_argument("--angle", default="", help="Camera angle note.")
+    camera.add_argument("--focus", default="", help="Focus or depth-of-field note.")
+    camera.add_argument("--notes", default="", help="Production notes.")
+
+    lighting = subparsers.add_parser(
+        "lighting",
+        help="Set lighting notes for a storyboard shot.",
+    )
+    lighting.add_argument("--story-id", required=True, help="Storyboard id.")
+    lighting.add_argument("--shot-id", required=True, help="Shot id.")
+    lighting.add_argument("--key-light", default="", help="Key light note.")
+    lighting.add_argument("--fill-light", default="", help="Fill light note.")
+    lighting.add_argument("--rim-light", default="", help="Rim light note.")
+    lighting.add_argument("--mood", default="", help="Mood note.")
+    lighting.add_argument("--time-of-day", default="", help="Time-of-day note.")
+    lighting.add_argument("--color-palette", default="", help="Color palette note.")
+    lighting.add_argument("--notes", default="", help="Production notes.")
 
     link_result = subparsers.add_parser(
         "link-result",
@@ -138,6 +170,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Manifest output path. Defaults to manifests/storyboards/<story-id>/selected_shots.json.",
     )
 
+    draft_plan = subparsers.add_parser(
+        "draft-plan",
+        help="Write a low-VRAM draft generation plan for storyboard shots.",
+    )
+    draft_plan.add_argument("--story-id", required=True, help="Storyboard id.")
+    draft_plan.add_argument("--output", default=None, help="Draft plan output path.")
+    draft_plan.add_argument("--default-width", type=int, default=512, help="Default draft width.")
+    draft_plan.add_argument("--default-height", type=int, default=512, help="Default draft height.")
+    draft_plan.add_argument("--default-steps", type=int, default=20, help="Default sampler steps.")
+
     editor = subparsers.add_parser(
         "editor",
         help="Write a lightweight HTML ShotEditor for a storyboard.",
@@ -192,6 +234,39 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         for shot in shots:
             print(f"{shot.order}. {shot.shot_id}: {shot.title} / {shot.character_id} / {shot.duration_seconds}s")
+        return 0
+
+    if args.command == "camera":
+        result = set_camera_work(
+            settings=settings,
+            story_id=args.story_id,
+            shot_id=args.shot_id,
+            framing=args.framing,
+            movement=args.movement,
+            lens_mm=args.lens_mm,
+            angle=args.angle,
+            focus=args.focus,
+            notes=args.notes,
+        )
+        print(f"Wrote camera work: {result.manifest_path}")
+        print(f"Camera work items: {result.item_count}")
+        return 0
+
+    if args.command == "lighting":
+        result = set_lighting_setup(
+            settings=settings,
+            story_id=args.story_id,
+            shot_id=args.shot_id,
+            key_light=args.key_light,
+            fill_light=args.fill_light,
+            rim_light=args.rim_light,
+            mood=args.mood,
+            time_of_day=args.time_of_day,
+            color_palette=args.color_palette,
+            notes=args.notes,
+        )
+        print(f"Wrote lighting setup: {result.manifest_path}")
+        print(f"Lighting setup items: {result.item_count}")
         return 0
 
     if args.command == "link-result":
@@ -268,6 +343,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Wrote selected shot manifest: {result.manifest_path}")
         print(f"Selected shots: {result.selected_shot_count}")
         print(f"Missing shots: {result.missing_shot_count}")
+        return 0
+
+    if args.command == "draft-plan":
+        result = build_draft_generation_plan(
+            settings=settings,
+            story_id=args.story_id,
+            output_path=args.output,
+            default_width=args.default_width,
+            default_height=args.default_height,
+            default_steps=args.default_steps,
+        )
+        print(f"Wrote draft generation plan: {result.plan_path}")
+        print(f"Drafts: {result.draft_count}")
+        print(f"Skipped shots: {result.skipped_count}")
         return 0
 
     if args.command == "editor":

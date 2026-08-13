@@ -55,11 +55,40 @@ JSON で確認する場合:
 python -m anime_studio.storyboard_cli list --story-id pilot_scene --json
 ```
 
+## カメラワークを管理する
+
+Shotごとの構図、カメラ移動、レンズ、角度、フォーカスを軽量JSONとして保存します。
+
+```powershell
+python -m anime_studio.storyboard_cli camera --story-id pilot_scene --shot-id shot_001 --framing "close-up" --movement "slow dolly in" --lens-mm 35 --angle "eye level" --focus "shallow depth of field"
+```
+
+出力先:
+
+```text
+storyboards/pilot_scene/camera_work.json
+```
+
+## ライティングを管理する
+
+Shotごとのキーライト、フィルライト、リムライト、ムード、時間帯、色味を軽量JSONとして保存します。
+
+```powershell
+python -m anime_studio.storyboard_cli lighting --story-id pilot_scene --shot-id shot_001 --key-light "soft key light" --fill-light "low fill" --mood "warm hopeful mood" --time-of-day "morning" --color-palette "amber and blue"
+```
+
+出力先:
+
+```text
+storyboards/pilot_scene/lighting_setups.json
+```
+
 ## Storyboard から ComfyUI workflow を生成する
 
 各 Shot の `character_id` を使い、登録済み LoRA manifest から ComfyUI workflow を 1 Shot につき 1 つ生成します。
 Shot の `prompt`、`camera`、`lighting` は positive prompt に追記されます。
 `negative_prompt`、`seed`、`width`、`height`、`steps` が設定されている場合は、ComfyUI workflow の該当ノードにも反映されます。
+`camera_work.json` と `lighting_setups.json` の内容も positive prompt と workflow metadata に反映されます。
 
 ```powershell
 python -m anime_studio.cli storyboard export-comfyui --story-id pilot_scene
@@ -95,6 +124,23 @@ queues/comfyui/jobs.json
 ```powershell
 python -m anime_studio.cli comfyui queue-submit --job-id <job_id>
 ```
+
+## ドラフト生成計画を作る
+
+実際にComfyUIへ投げる前に、Shotごとのprompt、negative prompt、seed、サイズ、steps、カメラ、ライティングをまとめたドラフト生成計画を作れます。
+RTX 3050 6GB向けに、未指定のShotは `512x512 / steps 20 / batch 1` を既定値にします。
+
+```powershell
+python -m anime_studio.storyboard_cli draft-plan --story-id pilot_scene
+```
+
+出力先:
+
+```text
+storyboards/pilot_scene/draft_generation_plan.json
+```
+
+`character_id` がないShotは `skipped_shots` に残ります。
 
 ## Shot へ生成結果を紐づける
 
@@ -176,6 +222,7 @@ storyboards/pilot_scene/preview.html
 
 `selected` になっている Shot result だけを、Shot 順に並べた軽量 JSON として書き出します。
 Unity Timeline や外部編集ツールは、この manifest を読むことで「どの Shot にどの生成結果を使うか」を判断できます。
+カメラワークとライティング台帳がある場合は、それらも各Shotに含まれます。
 
 ```powershell
 python -m anime_studio.storyboard_cli export-selected --story-id pilot_scene
@@ -192,6 +239,7 @@ manifests/storyboards/pilot_scene/selected_shots.json
 ## 軽量 ShotEditor HTML を作る
 
 Storyboard 全体の Shot 設定、候補、採用結果、未採用 Shot をブラウザで確認できる静的 HTML を書き出します。
+カメラワークとライティングも同じ画面で確認できます。
 編集そのものは JSON / CLI で行い、この HTML は確認用の薄いUIとして使います。
 
 ```powershell

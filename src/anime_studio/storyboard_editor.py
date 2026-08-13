@@ -8,6 +8,7 @@ from typing import Any
 
 from .settings import AppSettings
 from .storyboard import Shot, get_storyboard_path, load_storyboard
+from .storyboard_production import CameraWork, LightingSetup, load_camera_work_map, load_lighting_setup_map
 from .storyboard_review import read_raw_shot_results, result_decision
 
 
@@ -26,6 +27,8 @@ def write_storyboard_editor(
 ) -> StoryboardEditorResult:
     storyboard = load_storyboard(settings, story_id)
     results = read_raw_shot_results(settings, story_id)
+    camera_by_shot = load_camera_work_map(settings, story_id)
+    lighting_by_shot = load_lighting_setup_map(settings, story_id)
     editor_path = normalize_editor_path(settings, story_id, output_path)
     editor_path.parent.mkdir(parents=True, exist_ok=True)
     selected_count = sum(1 for result in results if result_decision(result) == "selected")
@@ -35,7 +38,15 @@ def write_storyboard_editor(
         if not any(result_decision(result) == "selected" and result.get("shot_id") == shot.shot_id for result in results)
     )
     editor_path.write_text(
-        render_storyboard_editor_html(settings, editor_path, storyboard.title, storyboard.shots, results),
+        render_storyboard_editor_html(
+            settings,
+            editor_path,
+            storyboard.title,
+            storyboard.shots,
+            results,
+            camera_by_shot,
+            lighting_by_shot,
+        ),
         encoding="utf-8",
     )
     return StoryboardEditorResult(
@@ -52,7 +63,11 @@ def render_storyboard_editor_html(
     title: str,
     shots: list[Shot],
     results: list[dict[str, Any]],
+    camera_by_shot: dict[str, CameraWork] | None = None,
+    lighting_by_shot: dict[str, LightingSetup] | None = None,
 ) -> str:
+    camera_by_shot = camera_by_shot or {}
+    lighting_by_shot = lighting_by_shot or {}
     results_by_shot: dict[str, list[dict[str, Any]]] = {}
     for result in results:
         results_by_shot.setdefault(str(result.get("shot_id", "")), []).append(result)
@@ -63,7 +78,14 @@ def render_storyboard_editor_html(
         if not any(result_decision(result) == "selected" for result in results_by_shot.get(shot.shot_id, []))
     )
     shot_sections = "\n".join(
-        render_shot_editor_section(settings, editor_path, shot, results_by_shot.get(shot.shot_id, []))
+        render_shot_editor_section(
+            settings,
+            editor_path,
+            shot,
+            results_by_shot.get(shot.shot_id, []),
+            camera_by_shot.get(shot.shot_id),
+            lighting_by_shot.get(shot.shot_id),
+        )
         for shot in sorted(shots, key=lambda item: item.order)
     )
     return f"""<!doctype html>
@@ -113,6 +135,8 @@ def render_shot_editor_section(
     editor_path: Path,
     shot: Shot,
     results: list[dict[str, Any]],
+    camera: CameraWork | None = None,
+    lighting: LightingSetup | None = None,
 ) -> str:
     selected = next((result for result in results if result_decision(result) == "selected"), None)
     status = "selected" if selected else "missing"
@@ -120,7 +144,7 @@ def render_shot_editor_section(
     if not result_cards:
         result_cards = '<p class="muted">No generated results linked yet.</p>'
     selected_block = render_selected_block(settings, editor_path, selected)
-    params = render_shot_params(shot)
+    params = render_shot_params(shot, camera, lighting)
     return f"""<section class="shot {status}">
   <div>
     <div class="muted">#{shot.order:03d} / {escape(shot.shot_id)} / {escape(status)}</div>
@@ -137,7 +161,7 @@ def render_shot_editor_section(
 </section>"""
 
 
-def render_shot_params(shot: Shot) -> str:
+def render_shot_params(shot: Shot, camera: CameraWork | None = None, lighting: LightingSetup | None = None) -> str:
     rows = [
         ("character", shot.character_id),
         ("duration", f"{shot.duration_seconds}s"),
@@ -145,6 +169,8 @@ def render_shot_params(shot: Shot) -> str:
         ("negative", shot.negative_prompt),
         ("camera", shot.camera),
         ("lighting", shot.lighting),
+        ("camera work", render_camera_work(camera)),
+        ("lighting setup", render_lighting_setup(lighting)),
         ("seed", str(shot.seed or "")),
         ("size", render_size(shot)),
         ("steps", str(shot.steps or "")),
@@ -154,6 +180,35 @@ def render_shot_params(shot: Shot) -> str:
     if not items:
         items = "<dd>No shot parameters yet.</dd>"
     return f"<dl>{items}</dl>"
+
+
+def render_camera_work(camera: CameraWork | None) -> str:
+    if camera is None:
+        return ""
+    parts = [
+        camera.framing,
+        camera.movement,
+        f"{camera.lens_mm}mm lens" if camera.lens_mm else "",
+        camera.angle,
+        camera.focus,
+        camera.notes,
+    ]
+    return ", ".join(part for part in parts if part)
+
+
+def render_lighting_setup(lighting: LightingSetup | None) -> str:
+    if lighting is None:
+        return ""
+    parts = [
+        lighting.key_light,
+        lighting.fill_light,
+        lighting.rim_light,
+        lighting.mood,
+        lighting.time_of_day,
+        lighting.color_palette,
+        lighting.notes,
+    ]
+    return ", ".join(part for part in parts if part)
 
 
 def render_selected_block(settings: AppSettings, editor_path: Path, result: dict[str, Any] | None) -> str:
