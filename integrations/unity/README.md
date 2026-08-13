@@ -2,7 +2,7 @@
 
 `selected_shots.json` を Unity 側で読み、採用済み Shot を `SelectedShotLibrary` ScriptableObject として取り込む最小サンプルです。
 
-この段階では Timeline を自動生成しません。まずは、AI Anime Studio が出力した Shot 順・採用画像・尺・カメラ・ライティング情報を Unity Project 内で参照できる状態にします。
+この段階では、AI Anime Studio が出力した Shot 順・採用画像・尺・カメラ・ライティング情報を Unity Project 内で参照し、編集開始用の仮 Timeline へ自動配置します。
 
 ## 使い方
 
@@ -23,6 +23,7 @@ Timeline生成には Unity の Timeline package が必要です。
 - 尺、seed、width、height、steps
 - prompt / negative prompt
 - カメラワークとライティングの要約
+- カメラワークとライティングの構造化フィールド
 - 画像ファイルが見つかった場合の `Texture2D` プレビュー参照
 
 ## Timeline生成
@@ -31,14 +32,16 @@ Timeline生成には Unity の Timeline package が必要です。
 
 画像プレビューがあるShotは `SpriteRenderer` 付きの子Objectとして配置されます。画像がないShotは、タイトルだけの簡易 `TextMesh` を置きます。
 
+各Shotの子Objectには、`camera_work` 由来の仮 `Camera` と、`lighting_setup` 由来の仮 `Light` も自動生成します。カメラは framing / angle / lens_mm をもとに距離・角度・画角を推定し、ライトは key / fill / rim / mood / time_of_day / color_palette をもとに簡易的な Directional Light を作ります。
+
 この実装は「編集開始用の仮Timeline」を作るためのものです。正式なカメラ演出やUnity Timelineの最終編集は、この仮配置を土台に調整します。
 
 ## 低VRAM開発での位置づけ
 
-ComfyUIで大量生成せず、まず採用済みの軽いShot単位manifestだけをUnityへ渡します。Unity側では画像参照と順序を確認するだけなので、RTX 3050 6GB 環境でも制作の足場として扱いやすい構成です。
+ComfyUIで大量生成せず、まず採用済みの軽いShot単位manifestだけをUnityへ渡します。Unity側では画像参照・順序・仮カメラ・仮ライトを確認するだけなので、RTX 3050 6GB環境でも制作の足場として扱いやすい構成です。
 
 ## 次の拡張候補
 
-- Shotごとの仮カメラ GameObject を生成する
-- ライティング情報から Light プリセットを作る
+- camera movement から簡易AnimationTrackを作る
 - Timeline Clip にShotメモやpromptを表示する
+- 仮カメラ・仮ライトのプリセットをJSONで調整可能にする

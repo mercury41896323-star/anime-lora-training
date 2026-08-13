@@ -29,7 +29,7 @@ namespace AIAnimeStudio.Editor
         public static SelectedShotLibrary ImportManifest(string manifestPath)
         {
             string json = File.ReadAllText(manifestPath);
-            SelectedShotsManifest = JsonUtility.FromJson<SelectedShotsManifest>(json);
+            SelectedShotsManifest manifest = JsonUtility.FromJson<SelectedShotsManifest>(json);
             if (manifest == null || manifest.story == null)
             {
                 throw new InvalidDataException("selected_shots.json could not be parsed.");
@@ -101,6 +101,26 @@ namespace AIAnimeStudio.Editor
             clip.lighting = shot.lighting;
             clip.cameraWork = shot.camera_work != null ? shot.camera_work.ToSummary() : "";
             clip.lightingSetup = shot.lighting_setup != null ? shot.lighting_setup.ToSummary() : "";
+            if (shot.camera_work != null)
+            {
+                clip.cameraFraming = shot.camera_work.framing;
+                clip.cameraMovement = shot.camera_work.movement;
+                clip.cameraLensMm = shot.camera_work.lens_mm;
+                clip.cameraAngle = shot.camera_work.angle;
+                clip.cameraFocus = shot.camera_work.focus;
+                clip.cameraNotes = shot.camera_work.notes;
+            }
+
+            if (shot.lighting_setup != null)
+            {
+                clip.lightingKeyLight = shot.lighting_setup.key_light;
+                clip.lightingFillLight = shot.lighting_setup.fill_light;
+                clip.lightingRimLight = shot.lighting_setup.rim_light;
+                clip.lightingMood = shot.lighting_setup.mood;
+                clip.lightingTimeOfDay = shot.lighting_setup.time_of_day;
+                clip.lightingColorPalette = shot.lighting_setup.color_palette;
+                clip.lightingNotes = shot.lighting_setup.notes;
+            }
 
             if (string.IsNullOrEmpty(clip.timelineClipName))
             {

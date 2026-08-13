@@ -37,5 +37,18 @@ namespace AIAnimeStudio
         public string lighting = "";
         public string cameraWork = "";
         public string lightingSetup = "";
+        public string cameraFraming = "";
+        public string cameraMovement = "";
+        public int cameraLensMm;
+        public string cameraAngle = "";
+        public string cameraFocus = "";
+        public string cameraNotes = "";
+        public string lightingKeyLight = "";
+        public string lightingFillLight = "";
+        public string lightingRimLight = "";
+        public string lightingMood = "";
+        public string lightingTimeOfDay = "";
+        public string lightingColorPalette = "";
+        public string lightingNotes = "";
     }
 }

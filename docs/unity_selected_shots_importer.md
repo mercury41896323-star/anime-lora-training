@@ -4,7 +4,7 @@
 
 ## 目的
 
-フェーズ4で採用した Shot だけを Unity 側へ渡し、次の制作作業に使える軽量な `SelectedShotLibrary` として管理します。
+フェーズ4で採用した Shot だけを Unity 側へ渡し、次の制作作業に使える軽量な `SelectedShotLibrary` として管理します。さらに、`SelectedShotLibrary` から編集開始用の Timeline を作り、Shotごとの仮カメラ・仮ライトまで配置します。
 
 ## 配置
 
@@ -48,9 +48,9 @@ Timeline生成には Unity の Timeline package が必要です。
 - `timeline_clip_name` と `addressable_key`
 - duration、seed、width、height、steps
 - prompt、negative prompt
-- カメラワーク要約
-- ライティング要約
-- 画像の場合の `Texture2D` プレビュー参照
+- カメラワーク要約と構造化フィールド
+- ライティング要約と構造化フィールド
+- 画像がある場合の `Texture2D` プレビュー参照
 
 ## Timeline自動配置
 
@@ -58,7 +58,12 @@ Timeline Builder は、Shotごとに `ActivationTrack` を作り、`duration_sec
 
 画像プレビューがあるShotは `SpriteRenderer` 付きの子Objectとして配置し、画像がないShotは簡易 `TextMesh` を置きます。
 
-## まだ作らないもの
+## 仮カメラ・仮ライト
 
-この段階では、カメラワークからCamera GameObjectを作る処理や、ライティング情報からLightを自動配置する処理はまだ行いません。
-まずは採用済みShotをUnity Timeline上に時間順で並べ、編集開始できる足場を作るところまでです。
+各Shotの子Objectには、`camera_work` と `lighting_setup` を読んだ仮の撮影リグを作ります。
+
+- `framing` / `angle` / `lens_mm` から Camera の距離・角度・画角を推定します。
+- `key_light` / `fill_light` / `rim_light` から Directional Light を作ります。
+- `mood` / `time_of_day` / `color_palette` から明るさと色味をざっくり決めます。
+
+まずは採用済みShotをUnity Timeline上に時間順で並べ、仮カメラ・仮ライト込みで編集開始できる足場を作るところまでです。
