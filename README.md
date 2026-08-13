@@ -19,9 +19,9 @@ AIを活用したアニメーション制作支援・学習・生成環境を構
 - CharacterProfile JSONの作成
 - FFmpegによるフレーム抽出コマンドの事前確認
 - キャラクター素材登録
-- 自動タグ記録と手動修正
-- 最終caption sidecarの生成
+- 手動タグsidecarの作成
 - LoRA学習用データセット生成
+- Kohya_ss / sd-scripts向け低VRAM LoRA設定生成
 
 ## まず動かすもの
 
@@ -81,7 +81,8 @@ anime-lora-training/
 ├─ docs/
 │  ├─ development_start.md
 │  ├─ character_profiles.md
-│  └─ phase2_pipeline.md
+│  ├─ phase2_pipeline.md
+│  └─ phase3_lora_training.md
 ├─ scripts/
 │  └─ run_inventory.ps1
 ├─ src/
@@ -93,6 +94,7 @@ anime-lora-training/
 │     ├─ cli.py
 │     ├─ dataset_builder.py
 │     ├─ frame_extraction.py
+│     ├─ kohya_config.py
 │     ├─ tagger.py
 │     ├─ wd14_provider.py
 │     └─ settings.py
@@ -104,8 +106,9 @@ anime-lora-training/
    ├─ test_character_manager.py
    ├─ test_character_profile.py
    ├─ test_frame_extraction.py
-   ├─ test_tagger_and_dataset.py
-   └─ test_wd14_provider.py
+   ├─ test_kohya_config.py
+   ├─ test_settings.py
+   └─ test_tagger_and_dataset.py
 ```
 
 ## 最小プロトタイプ
@@ -164,6 +167,24 @@ python -m anime_studio.cli tags auto --character-id sample_hero --provider wd14
 ```
 
 `.tags.json`には`auto_tags`、`manual_tags`、`rejected_tags`、`final_tags`を保存します。WD14で自動タグを再生成しても、手動修正は残せます。
+
+### Kohya Low-VRAM Config CLI
+
+LoRA学習そのものを起動する前段階として、Kohya_ss / sd-scripts向けの低VRAM設定ファイルを生成できます。
+
+```powershell
+python -m anime_studio.cli lora kohya-config --character-id sample_hero --pretrained-model models/sd15.safetensors --kohya-root C:/tools/sd-scripts
+```
+
+出力先:
+
+```text
+config/kohya/sample_hero/dataset.toml
+config/kohya/sample_hero/train_low_vram.toml
+config/kohya/sample_hero/run_train.ps1
+```
+
+このCLIは先にLoRA用データセットも生成し、`run_train.ps1`には`accelerate launch train_network.py`用のコマンドを保存します。実際に学習を始める前に、モデルパス、画像枚数、タグ、保存先を確認してください。
 
 ## 6GB VRAM向け初期設定
 
@@ -334,6 +355,8 @@ python -m anime_studio.cli tags auto --character-id sample_hero --provider wd14
 2. キャラクターLoRA学習
 3. 学習結果の管理
 4. ComfyUIからのLoRA利用
+
+現在は、1の入口として低VRAM LoRA設定ファイル生成を追加しています。実際の学習実行は、設定内容を確認してから手動で開始する方針です。
 
 ### Phase 4: ショット制作
 

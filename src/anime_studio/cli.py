@@ -9,6 +9,7 @@ from .character_manager import register_character_asset
 from .character_profile import create_character_profile
 from .dataset_builder import build_lora_dataset
 from .frame_extraction import build_frame_extraction_plan, extract_frames
+from .kohya_config import KohyaLowVramSettings, generate_kohya_low_vram_config
 from .settings import load_settings
 from .tagger import finalize_tag_sidecars, generate_auto_tag_records, update_manual_tags
 
@@ -141,6 +142,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Build a LoRA image/caption dataset for one character.",
     )
     dataset_lora.add_argument("--character-id", required=True, help="Character id to export.")
+
+    lora = subparsers.add_parser(
+        "lora",
+        help="Prepare low-VRAM LoRA training configs.",
+    )
+    lora_subparsers = lora.add_subparsers(dest="lora_command", required=True)
+    kohya = lora_subparsers.add_parser(
+        "kohya-config",
+        help="Generate Kohya/sd-scripts config files for low-VRAM LoRA training.",
+    )
+    kohya.add_argument("--character-id", required=True, help="Character id to train.")
+    kohya.add_argument(
+        "--pretrained-model",
+        required=True,
+        help="Path or Hugging Face model id for the SD base model.",
+    )
+    kohya.add_argument(
+        "--kohya-root",
+        default=".",
+        help="Path to the sd-scripts or Kohya scripts directory.",
+    )
+    kohya.add_argument("--resolution", type=int, default=512, help="Training resolution.")
+    kohya.add_argument("--repeats", type=int, default=10, help="Dataset repeats.")
+    kohya.add_argument("--epochs", type=int, default=10, help="Max train epochs.")
+    kohya.add_argument("--network-dim", type=int, default=16, help="LoRA rank.")
+    kohya.add_argument("--network-alpha", type=int, default=8, help="LoRA alpha.")
+    kohya.add_argument("--learning-rate", default="1e-4", help="Learning rate.")
     return parser
 
 
@@ -242,6 +270,26 @@ def main(argv: list[str] | None = None) -> int:
             f"Built dataset: {result.dataset_dir} "
             f"({result.image_count} images, {result.caption_count} captions)"
         )
+        return 0
+
+    if args.command == "lora" and args.lora_command == "kohya-config":
+        result = generate_kohya_low_vram_config(
+            settings=settings,
+            character_id=args.character_id,
+            kohya_settings=KohyaLowVramSettings(
+                pretrained_model_name_or_path=args.pretrained_model,
+                kohya_root=args.kohya_root,
+                resolution=args.resolution,
+                repeats=args.repeats,
+                max_train_epochs=args.epochs,
+                network_dim=args.network_dim,
+                network_alpha=args.network_alpha,
+                learning_rate=args.learning_rate,
+            ),
+        )
+        print(f"Wrote Kohya config directory: {result.config_dir}")
+        print(f"Dataset images: {result.dataset_image_count}")
+        print(f"Run script: {result.run_script}")
         return 0
 
     parser.error(f"Unknown command: {args.command}")

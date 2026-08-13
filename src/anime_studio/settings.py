@@ -42,7 +42,7 @@ class AppSettings:
 
 def load_settings(config_path: str | Path) -> AppSettings:
     path = Path(config_path)
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8-sig"))
     base_dir = path.parent.parent
 
     runtime = data["runtime"]
