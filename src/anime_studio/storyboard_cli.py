@@ -9,6 +9,7 @@ from .storyboard_results import (
     link_shot_result,
     list_shot_results,
 )
+from .storyboard_editor_manifest import export_selected_shot_manifest
 from .storyboard_review import (
     set_shot_result_decision,
     write_storyboard_preview,
@@ -90,6 +91,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Preview HTML output path. Defaults to storyboards/<story-id>/preview.html.",
     )
+
+    export_selected = subparsers.add_parser(
+        "export-selected",
+        help="Export selected shot results for Unity and editing tools.",
+    )
+    export_selected.add_argument("--story-id", required=True, help="Storyboard id.")
+    export_selected.add_argument(
+        "--output",
+        default=None,
+        help="Manifest output path. Defaults to manifests/storyboards/<story-id>/selected_shots.json.",
+    )
     return parser
 
 
@@ -161,6 +173,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Wrote storyboard preview: {result.preview_path}")
         print(f"Results: {result.result_count}")
         print(f"Selected: {result.selected_count}")
+        return 0
+
+    if args.command == "export-selected":
+        result = export_selected_shot_manifest(
+            settings=settings,
+            story_id=args.story_id,
+            output_path=args.output,
+        )
+        print(f"Wrote selected shot manifest: {result.manifest_path}")
+        print(f"Selected shots: {result.selected_shot_count}")
+        print(f"Missing shots: {result.missing_shot_count}")
         return 0
 
     parser.error(f"Unknown command: {args.command}")
