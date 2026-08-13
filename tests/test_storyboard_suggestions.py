@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from anime_studio.character_profile import create_character_profile
 from anime_studio.settings import load_settings
 from anime_studio.storyboard import add_shot, create_storyboard
+from anime_studio.storyboard_editor import write_storyboard_editor
 from anime_studio.storyboard_production import set_camera_work, set_lighting_setup
 from anime_studio.storyboard_results import link_shot_result, set_shot_result_decision
 from anime_studio.storyboard_suggestions import build_shot_suggestion_report
@@ -81,6 +82,39 @@ class StoryboardSuggestionsTest(unittest.TestCase):
             self.assertIn("warm hopeful mood", manifest["shots"][0]["prompt"])
             self.assertEqual(manifest["shots"][1]["risk_level"], "blocked")
             self.assertIn("character_id", manifest["shots"][1]["missing"])
+
+    def test_storyboard_editor_shows_suggestion_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            settings = write_settings(root)
+            create_character_profile(settings, "sample_hero", "Sample Hero")
+            create_storyboard(settings, "pilot_scene", "Pilot Scene")
+            add_shot(
+                settings=settings,
+                story_id="pilot_scene",
+                shot_id="shot_001",
+                title="Opening",
+                character_id="sample_hero",
+                prompt="sample_hero, hopeful smile",
+                width=1024,
+                height=1024,
+                steps=32,
+            )
+            set_camera_work(
+                settings=settings,
+                story_id="pilot_scene",
+                shot_id="shot_001",
+                movement="slow dolly in",
+            )
+            build_shot_suggestion_report(settings, "pilot_scene")
+
+            editor = write_storyboard_editor(settings, "pilot_scene")
+            html = editor.editor_path.read_text(encoding="utf-8")
+
+            self.assertIn("Shot Suggestion AI", html)
+            self.assertIn("needs_attention", html)
+            self.assertIn("large_resolution_for_6gb", html)
+            self.assertIn("slow dolly in", html)
 
     def test_flags_settings_that_are_risky_for_6gb_vram(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

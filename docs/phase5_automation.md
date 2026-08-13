@@ -6,6 +6,7 @@ Phase 6の音声・リップシンク・効果音へ進む前に、Storyboardか
 ## 実装済み
 
 - Shot Suggestion AI: Storyboard、カメラワーク、ライティング、Shot結果を読み、生成前の準備状況を提案JSONにします。
+- ShotEditor連携: 生成済み `shot_suggestions.json` がある場合、ShotEditor HTML上で各Shotの準備度と改善候補を確認できます。
 - RenderQueue: export済みComfyUI workflowをローカルキューへ積み、ComfyUI APIへ送る入口を用意しています。
 - Asset Library連携: CharacterProfile由来の素材を薄いCLIで一覧・検索できます。
 - ショット単位の生成・管理: 生成結果の紐づけ、採用・没管理、preview、selected_shots manifest出力まで接続済みです。
@@ -34,6 +35,5 @@ storyboards/pilot_scene/shot_suggestions.json
 
 ## Phase 6へ入る前の残り候補
 
-- Shot Suggestion AIの提案をShotEditor HTMLに表示する。
 - RenderQueueの複数Shotバッチ確認ビューを追加する。
 - 生成済み候補の品質メモを、採用判断と一緒に一覧できるようにする。

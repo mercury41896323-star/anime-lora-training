@@ -240,6 +240,7 @@ manifests/storyboards/pilot_scene/selected_shots.json
 
 Storyboard 全体の Shot 設定、候補、採用結果、未採用 Shot をブラウザで確認できる静的 HTML を書き出します。
 カメラワークとライティングも同じ画面で確認できます。
+`shot_suggestions.json` が生成済みの場合は、Shot Suggestion AIの準備度、低VRAM警告、prompt追加候補、次の修正提案も各Shotに表示されます。
 編集そのものは JSON / CLI で行い、この HTML は確認用の薄いUIとして使います。
 
 ```powershell

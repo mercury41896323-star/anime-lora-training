@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from html import escape
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,7 @@ from .settings import AppSettings
 from .storyboard import Shot, get_storyboard_path, load_storyboard
 from .storyboard_production import CameraWork, LightingSetup, load_camera_work_map, load_lighting_setup_map
 from .storyboard_review import read_raw_shot_results, result_decision
+from .storyboard_suggestions import normalize_suggestion_report_path
 
 
 @dataclass(frozen=True)
@@ -29,6 +31,7 @@ def write_storyboard_editor(
     results = read_raw_shot_results(settings, story_id)
     camera_by_shot = load_camera_work_map(settings, story_id)
     lighting_by_shot = load_lighting_setup_map(settings, story_id)
+    suggestions_by_shot = load_suggestion_map(settings, story_id)
     editor_path = normalize_editor_path(settings, story_id, output_path)
     editor_path.parent.mkdir(parents=True, exist_ok=True)
     selected_count = sum(1 for result in results if result_decision(result) == "selected")
@@ -46,6 +49,7 @@ def write_storyboard_editor(
             results,
             camera_by_shot,
             lighting_by_shot,
+            suggestions_by_shot,
         ),
         encoding="utf-8",
     )
@@ -65,9 +69,11 @@ def render_storyboard_editor_html(
     results: list[dict[str, Any]],
     camera_by_shot: dict[str, CameraWork] | None = None,
     lighting_by_shot: dict[str, LightingSetup] | None = None,
+    suggestions_by_shot: dict[str, dict[str, Any]] | None = None,
 ) -> str:
     camera_by_shot = camera_by_shot or {}
     lighting_by_shot = lighting_by_shot or {}
+    suggestions_by_shot = suggestions_by_shot or {}
     results_by_shot: dict[str, list[dict[str, Any]]] = {}
     for result in results:
         results_by_shot.setdefault(str(result.get("shot_id", "")), []).append(result)
@@ -85,6 +91,7 @@ def render_storyboard_editor_html(
             results_by_shot.get(shot.shot_id, []),
             camera_by_shot.get(shot.shot_id),
             lighting_by_shot.get(shot.shot_id),
+            suggestions_by_shot.get(shot.shot_id),
         )
         for shot in sorted(shots, key=lambda item: item.order)
     )
@@ -103,6 +110,11 @@ def render_storyboard_editor_html(
     .pill {{ border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; color: var(--muted); }}
     .shot {{ display: grid; gap: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }}
     .shot.missing {{ border-color: var(--warn); }}
+    .suggestion {{ border-color: #3b82f6; }}
+    .suggestion.ready {{ border-color: var(--selected); }}
+    .suggestion.needs_attention {{ border-color: var(--warn); }}
+    .suggestion.blocked {{ border-color: var(--rejected); }}
+    .tag-list {{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }}
     .grid {{ display: grid; grid-template-columns: minmax(220px, 0.8fr) minmax(240px, 1.2fr); gap: 14px; }}
     .box {{ background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }}
     .muted {{ color: var(--muted); font-size: 13px; }}
@@ -110,6 +122,9 @@ def render_storyboard_editor_html(
     .badge {{ display: inline-block; padding: 3px 8px; border-radius: 999px; background: #263044; color: var(--muted); font-size: 12px; }}
     .badge.selected {{ background: var(--selected); color: #001b0a; }}
     .badge.rejected {{ background: var(--rejected); color: #2b0000; }}
+    .badge.ready {{ background: var(--selected); color: #001b0a; }}
+    .badge.needs_attention {{ background: var(--warn); color: #2b1d00; }}
+    .badge.blocked {{ background: var(--rejected); color: #2b0000; }}
     code {{ color: #cbd5e1; word-break: break-all; }}
     @media (max-width: 760px) {{ .grid {{ grid-template-columns: 1fr; }} }}
   </style>
@@ -137,6 +152,7 @@ def render_shot_editor_section(
     results: list[dict[str, Any]],
     camera: CameraWork | None = None,
     lighting: LightingSetup | None = None,
+    suggestion: dict[str, Any] | None = None,
 ) -> str:
     selected = next((result for result in results if result_decision(result) == "selected"), None)
     status = "selected" if selected else "missing"
@@ -145,6 +161,7 @@ def render_shot_editor_section(
         result_cards = '<p class="muted">No generated results linked yet.</p>'
     selected_block = render_selected_block(settings, editor_path, selected)
     params = render_shot_params(shot, camera, lighting)
+    suggestion_block = render_suggestion_block(suggestion)
     return f"""<section class="shot {status}">
   <div>
     <div class="muted">#{shot.order:03d} / {escape(shot.shot_id)} / {escape(status)}</div>
@@ -154,11 +171,53 @@ def render_shot_editor_section(
     <div class="box">{params}</div>
     <div class="box">{selected_block}</div>
   </div>
+  {suggestion_block}
   <div class="box">
     <div class="muted">All linked results</div>
     {result_cards}
   </div>
 </section>"""
+
+
+def load_suggestion_map(settings: AppSettings, story_id: str) -> dict[str, dict[str, Any]]:
+    path = normalize_suggestion_report_path(settings, story_id, None)
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8-sig"))
+    return {str(item.get("shot_id", "")): dict(item) for item in data.get("shots", [])}
+
+
+def render_suggestion_block(suggestion: dict[str, Any] | None) -> str:
+    if suggestion is None:
+        return ""
+    risk_level = str(suggestion.get("risk_level", "needs_attention"))
+    readiness_score = escape(str(suggestion.get("readiness_score", "")))
+    missing = render_tag_list("missing", suggestion.get("missing", []))
+    quality_flags = render_tag_list("quality flags", suggestion.get("quality_flags", []))
+    prompt_additions = render_tag_list("prompt additions", suggestion.get("prompt_additions", []))
+    actions = render_action_list(suggestion.get("suggestions", []))
+    return f"""<div class="box suggestion {escape(risk_level)}">
+    <div class="muted">Shot Suggestion AI</div>
+    <p><span class="badge {escape(risk_level)}">{escape(risk_level)}</span> readiness: {readiness_score}</p>
+    {missing}
+    {quality_flags}
+    {prompt_additions}
+    {actions}
+  </div>"""
+
+
+def render_tag_list(label: str, values: object) -> str:
+    if not isinstance(values, list) or not values:
+        return ""
+    tags = "".join(f'<span class="badge">{escape(str(value))}</span>' for value in values)
+    return f'<div><div class="muted">{escape(label)}</div><div class="tag-list">{tags}</div></div>'
+
+
+def render_action_list(values: object) -> str:
+    if not isinstance(values, list) or not values:
+        return ""
+    items = "".join(f"<li>{escape(str(value))}</li>" for value in values)
+    return f"<div><div class=\"muted\">suggestions</div><ul>{items}</ul></div>"
 
 
 def render_shot_params(shot: Shot, camera: CameraWork | None = None, lighting: LightingSetup | None = None) -> str:
