@@ -24,6 +24,7 @@ from .lora_manifest import generate_lora_manifest
 from .lora_registry import list_lora_artifacts, register_lora_result
 from .settings import load_settings
 from .storyboard import add_shot, create_storyboard, list_storyboard_shots
+from .storyboard_comfyui import export_storyboard_comfyui_workflows
 from .tagger import finalize_tag_sidecars, generate_auto_tag_records, update_manual_tags
 
 
@@ -142,6 +143,42 @@ def build_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="Print full JSON records.",
+    )
+    storyboard_export_comfyui = storyboard_subparsers.add_parser(
+        "export-comfyui",
+        help="Export one ComfyUI workflow per storyboard shot.",
+    )
+    storyboard_export_comfyui.add_argument("--story-id", required=True, help="Storyboard id.")
+    storyboard_export_comfyui.add_argument(
+        "--template",
+        default=None,
+        help="ComfyUI workflow template JSON.",
+    )
+    storyboard_export_comfyui.add_argument(
+        "--output-dir",
+        default=None,
+        help="Output directory. Defaults to outputs/comfyui/storyboards/<story-id>.",
+    )
+    storyboard_export_comfyui.add_argument(
+        "--lora-index",
+        type=int,
+        default=0,
+        help="Index of the LoRA entry to inject from each character manifest.",
+    )
+    storyboard_export_comfyui.add_argument(
+        "--queue",
+        action="store_true",
+        help="Also add exported workflows to the local ComfyUI queue.",
+    )
+    storyboard_export_comfyui.add_argument(
+        "--base-url",
+        default=DEFAULT_COMFYUI_BASE_URL,
+        help="ComfyUI server URL used when --queue is set.",
+    )
+    storyboard_export_comfyui.add_argument(
+        "--queue-path",
+        default=None,
+        help="Queue JSON path. Defaults to queues/comfyui/jobs.json.",
     )
 
     frames = subparsers.add_parser(
@@ -534,6 +571,22 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         for shot in shots:
             print(f"{shot.order}. {shot.shot_id}: {shot.title} / {shot.character_id} / {shot.duration_seconds}s")
+        return 0
+
+    if args.command == "storyboard" and args.storyboard_command == "export-comfyui":
+        result = export_storyboard_comfyui_workflows(
+            settings=settings,
+            story_id=args.story_id,
+            template_path=args.template,
+            output_dir=args.output_dir,
+            lora_index=args.lora_index,
+            enqueue=args.queue,
+            base_url=args.base_url,
+            queue_path=args.queue_path,
+        )
+        print(f"Wrote storyboard ComfyUI manifest: {result.manifest_path}")
+        print(f"Workflows: {len(result.workflows)}")
+        print(f"Skipped shots: {len(result.skipped_shots)}")
         return 0
 
     if args.command == "frames":
