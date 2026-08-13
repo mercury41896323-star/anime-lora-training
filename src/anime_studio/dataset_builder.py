@@ -6,7 +6,7 @@ from pathlib import Path
 import shutil
 
 from .character_profile import load_character_profile, validate_character_id
-from .tagger import collect_character_images
+from .tagger import collect_character_images, finalize_tag_sidecars
 from .settings import AppSettings
 
 
@@ -21,6 +21,7 @@ class DatasetBuildResult:
 def build_lora_dataset(settings: AppSettings, character_id: str) -> DatasetBuildResult:
     validate_character_id(character_id)
     profile = load_character_profile(settings, character_id)
+    finalize_tag_sidecars(settings, character_id, overwrite=True)
     image_paths = collect_character_images(settings, character_id)
 
     dataset_dir = settings.datasets.lora / character_id

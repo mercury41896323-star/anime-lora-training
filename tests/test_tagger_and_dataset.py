@@ -14,7 +14,12 @@ from anime_studio.character_manager import register_character_asset
 from anime_studio.character_profile import create_character_profile
 from anime_studio.dataset_builder import build_lora_dataset
 from anime_studio.settings import load_settings
-from anime_studio.tagger import prepare_tag_sidecars
+from anime_studio.tagger import (
+    finalize_tag_sidecars,
+    generate_auto_tag_records,
+    tag_record_path,
+    update_manual_tags,
+)
 
 
 class TaggerAndDatasetTest(unittest.TestCase):
@@ -34,18 +39,45 @@ class TaggerAndDatasetTest(unittest.TestCase):
             )
             register_character_asset(settings, "sample_hero", source)
 
-            tag_result = prepare_tag_sidecars(
+            auto_result = generate_auto_tag_records(
                 settings,
                 "sample_hero",
                 extra_tags=["anime_style"],
             )
+            manual_result = update_manual_tags(
+                settings,
+                "sample_hero",
+                add_tags=["blue_hair"],
+                reject_tags=["hero"],
+            )
+            final_result = finalize_tag_sidecars(settings, "sample_hero")
             dataset = build_lora_dataset(settings, "sample_hero")
+            registered_image = next(
+                (
+                    root
+                    / "assets"
+                    / "processed"
+                    / "characters"
+                    / "sample_hero"
+                    / "sources"
+                    / "image"
+                ).glob("*.png")
+            )
+            tag_record = json.loads(tag_record_path(registered_image).read_text(encoding="utf-8"))
 
-            self.assertEqual(len(tag_result.files_written), 1)
+            self.assertEqual(len(auto_result.files_written), 1)
+            self.assertEqual(len(manual_result.files_written), 1)
+            self.assertEqual(len(final_result.files_written), 1)
+            self.assertIn("sample_hero", tag_record["auto_tags"])
+            self.assertIn("blue_hair", tag_record["manual_tags"])
+            self.assertNotIn("hero", tag_record["final_tags"])
             self.assertEqual(dataset.image_count, 1)
             self.assertEqual(dataset.caption_count, 1)
             caption = next((dataset.dataset_dir / "images").glob("*.txt"))
-            self.assertEqual(caption.read_text(encoding="utf-8").strip(), "sample_hero, anime_style")
+            self.assertEqual(
+                caption.read_text(encoding="utf-8").strip(),
+                "sample_hero, anime_style, blue_hair",
+            )
 
 
 def write_settings(root: Path):

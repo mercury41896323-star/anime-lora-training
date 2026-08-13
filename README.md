@@ -19,7 +19,8 @@ AIを活用したアニメーション制作支援・学習・生成環境を構
 - CharacterProfile JSONの作成
 - FFmpegによるフレーム抽出コマンドの事前確認
 - キャラクター素材登録
-- 手動タグsidecarの作成
+- 自動タグ記録と手動修正
+- 最終caption sidecarの生成
 - LoRA学習用データセット生成
 
 ## まず動かすもの
@@ -142,15 +143,17 @@ python -m anime_studio.cli frames --video assets/raw/sample.mp4 --character-id s
 
 ### Character Asset / Dataset CLI
 
-キャラクターごとに素材を登録し、手動タグのsidecarを作り、LoRA学習用データセットへまとめます。
+キャラクターごとに素材を登録し、自動タグ、手動修正、最終タグの3層で管理してから、LoRA学習用データセットへまとめます。
 
 ```powershell
 python -m anime_studio.cli character register-asset --id sample_hero --source assets/raw/sample.png
-python -m anime_studio.cli tags --character-id sample_hero --extra-tag anime_style
+python -m anime_studio.cli tags auto --character-id sample_hero --extra-tag anime_style
+python -m anime_studio.cli tags manual --character-id sample_hero --add-tag blue_hair
+python -m anime_studio.cli tags finalize --character-id sample_hero
 python -m anime_studio.cli dataset build-lora --character-id sample_hero
 ```
 
-WD14本体はまだ同梱していません。まずは同じ`.txt` caption形式でパイプラインを固定し、後からWD14出力へ差し替えます。
+WD14本体はまだ同梱していません。まずは`.tags.json`に`auto_tags`、`manual_tags`、`rejected_tags`、`final_tags`を保存し、後からWD14出力を`auto_tags`へ差し替えます。
 
 ## 6GB VRAM向け初期設定
 
@@ -313,7 +316,7 @@ WD14本体はまだ同梱していません。まずは同じ`.txt` caption形�
 4. WD14タグ付け
 5. 学習データセット生成
 
-現在は、1-3と5の最小実装が入り、4は手動タグsidecar方式で入口を用意しています。
+現在は、1-3と5の最小実装が入り、4は自動タグ記録、手動修正、最終caption生成の入口を用意しています。
 
 ### Phase 3: LoRA学習
 

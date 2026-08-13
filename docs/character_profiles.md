@@ -39,3 +39,13 @@ python -m anime_studio.cli character register-asset --id sample_hero --source as
 ```
 
 Registered files are copied into the character workspace under `assets/processed/characters/<character_id>/sources/`.
+
+## Editable Tags
+
+```powershell
+python -m anime_studio.cli tags auto --character-id sample_hero
+python -m anime_studio.cli tags manual --character-id sample_hero --add-tag blue_hair
+python -m anime_studio.cli tags finalize --character-id sample_hero
+```
+
+Auto tags are saved separately from manual edits so tags can be regenerated later without losing human corrections.

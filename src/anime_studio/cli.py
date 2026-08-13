@@ -10,7 +10,7 @@ from .character_profile import create_character_profile
 from .dataset_builder import build_lora_dataset
 from .frame_extraction import build_frame_extraction_plan, extract_frames
 from .settings import load_settings
-from .tagger import prepare_tag_sidecars
+from .tagger import finalize_tag_sidecars, generate_auto_tag_records, update_manual_tags
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -79,19 +79,56 @@ def build_parser() -> argparse.ArgumentParser:
 
     tags = subparsers.add_parser(
         "tags",
-        help="Create caption sidecars for character images.",
+        help="Generate, edit, and finalize character image tags.",
     )
-    tags.add_argument("--character-id", required=True, help="Character id to tag.")
-    tags.add_argument(
+    tag_subparsers = tags.add_subparsers(dest="tag_command", required=True)
+    tags_auto = tag_subparsers.add_parser(
+        "auto",
+        help="Generate editable auto tag records.",
+    )
+    tags_auto.add_argument("--character-id", required=True, help="Character id to tag.")
+    tags_auto.add_argument(
+        "--provider",
+        default="baseline",
+        help="Auto tag provider name. Current lightweight provider is baseline.",
+    )
+    tags_auto.add_argument(
         "--extra-tag",
         action="append",
         default=None,
-        help="Additional manual tag. Can be passed more than once.",
+        help="Additional auto tag. Can be passed more than once.",
     )
-    tags.add_argument(
+    tags_auto.add_argument(
         "--overwrite",
         action="store_true",
-        help="Overwrite existing caption sidecars.",
+        help="Overwrite existing auto tag records while preserving manual edits.",
+    )
+    tags_manual = tag_subparsers.add_parser(
+        "manual",
+        help="Add manual tags or reject unwanted tags.",
+    )
+    tags_manual.add_argument("--character-id", required=True, help="Character id to edit.")
+    tags_manual.add_argument(
+        "--add-tag",
+        action="append",
+        default=None,
+        help="Manual tag to add. Can be passed more than once.",
+    )
+    tags_manual.add_argument(
+        "--reject-tag",
+        action="append",
+        default=None,
+        help="Tag to exclude from final captions. Can be passed more than once.",
+    )
+    tags_finalize = tag_subparsers.add_parser(
+        "finalize",
+        help="Write final .txt captions from tag records.",
+    )
+    tags_finalize.add_argument("--character-id", required=True, help="Character id to finalize.")
+    tags_finalize.add_argument(
+        "--no-overwrite",
+        action="store_true",
+        help="Keep existing .txt captions.",
     )
 
     dataset = subparsers.add_parser(
@@ -166,14 +203,34 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         return extract_frames(plan)
 
-    if args.command == "tags":
-        result = prepare_tag_sidecars(
+    if args.command == "tags" and args.tag_command == "auto":
+        result = generate_auto_tag_records(
             settings=settings,
             character_id=args.character_id,
             extra_tags=args.extra_tag,
+            provider=args.provider,
             overwrite=args.overwrite,
         )
-        print(f"Wrote {len(result.files_written)} caption sidecars")
+        print(f"Wrote {len(result.files_written)} auto tag records")
+        return 0
+
+    if args.command == "tags" and args.tag_command == "manual":
+        result = update_manual_tags(
+            settings=settings,
+            character_id=args.character_id,
+            add_tags=args.add_tag,
+            reject_tags=args.reject_tag,
+        )
+        print(f"Updated {len(result.files_written)} tag records")
+        return 0
+
+    if args.command == "tags" and args.tag_command == "finalize":
+        result = finalize_tag_sidecars(
+            settings=settings,
+            character_id=args.character_id,
+            overwrite=not args.no_overwrite,
+        )
+        print(f"Wrote {len(result.files_written)} final caption sidecars")
         return 0
 
     if args.command == "dataset" and args.dataset_command == "build-lora":
