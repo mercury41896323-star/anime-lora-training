@@ -4,7 +4,7 @@
 
 ## 目的
 
-フェーズ4で採用した Shot だけを Unity 側へ渡し、次の制作作業に使える軽量な `SelectedShotLibrary` として管理します。さらに、`SelectedShotLibrary` から編集開始用の Timeline を作り、Shotごとの仮カメラ・仮ライトまで配置します。
+フェーズ4で採用した Shot だけを Unity 側へ渡し、次の制作作業に使える軽量な `SelectedShotLibrary` として管理します。さらに、`SelectedShotLibrary` から編集開始用の Timeline を作り、Shotごとの仮カメラ・仮ライト・仮カメラ移動まで配置します。
 
 ## 配置
 
@@ -66,4 +66,13 @@ Timeline Builder は、Shotごとに `ActivationTrack` を作り、`duration_sec
 - `key_light` / `fill_light` / `rim_light` から Directional Light を作ります。
 - `mood` / `time_of_day` / `color_palette` から明るさと色味をざっくり決めます。
 
-まずは採用済みShotをUnity Timeline上に時間順で並べ、仮カメラ・仮ライト込みで編集開始できる足場を作るところまでです。
+## 仮カメラ移動
+
+`cameraMovement` に動きが入っているShotでは、Camera用の `.anim` を自動生成し、Timelineへ `AnimationTrack` として配置します。
+
+- `dolly in` / `push in` / `zoom in` はカメラを前へ寄せます。
+- `dolly out` / `pull back` / `zoom out` はカメラを後ろへ引きます。
+- `pan left/right`、`tilt up/down`、`truck left/right`、`crane up/down` を簡易的に反映します。
+- `static` / `locked` / `fixed` / `none` / `still` は移動なしとして扱います。
+
+まずは採用済みShotをUnity Timeline上に時間順で並べ、仮カメラ・仮ライト・仮カメラ移動込みで編集開始できる足場を作るところまでです。
