@@ -11,7 +11,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from anime_studio.character_profile import create_character_profile
-from anime_studio.comfyui_workflow_export import export_comfyui_workflow
+from anime_studio.comfyui_workflow_export import (
+    export_comfyui_workflow,
+    list_comfyui_templates,
+)
 from anime_studio.lora_manifest import generate_lora_manifest
 from anime_studio.lora_registry import register_lora_result
 from anime_studio.settings import load_settings
@@ -52,6 +55,7 @@ class ComfyWorkflowExportTest(unittest.TestCase):
             lora_inputs = workflow["2"]["inputs"]
             prompt = workflow["3"]["inputs"]["text"]
             self.assertEqual(result.lora_name, "sample_hero_v1.safetensors")
+            self.assertEqual(result.template_path, template_path)
             self.assertEqual(lora_inputs["lora_name"], "sample_hero_v1.safetensors")
             self.assertEqual(lora_inputs["strength_model"], 0.6)
             self.assertEqual(lora_inputs["strength_clip"], 0.6)
@@ -61,6 +65,57 @@ class ComfyWorkflowExportTest(unittest.TestCase):
                 result.workflow_path,
                 root / "outputs" / "comfyui" / "sample_hero" / "draft_with_lora.json",
             )
+
+    def test_exports_with_default_template_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            settings = write_settings(root)
+            create_character_profile(
+                settings,
+                "default_hero",
+                "Default Hero",
+                trigger_tags=["default_hero"],
+            )
+            register_lora_result(
+                settings=settings,
+                character_id="default_hero",
+                model_path="outputs/lora/default_hero/default_hero_v1.safetensors",
+                display_name="Default Hero v1",
+            )
+            template_path = root / "templates" / "comfyui" / "sd15_lora_txt2img_512.json"
+            template_path.parent.mkdir(parents=True)
+            template_path.write_text(
+                (ROOT / "templates" / "comfyui" / "sd15_lora_txt2img_512.json").read_text(
+                    encoding="utf-8"
+                ),
+                encoding="utf-8",
+            )
+
+            result = export_comfyui_workflow(
+                settings=settings,
+                character_id="default_hero",
+            )
+
+            workflow = json.loads(result.workflow_path.read_text(encoding="utf-8"))
+            self.assertEqual(result.template_path, template_path)
+            self.assertEqual(workflow["2"]["inputs"]["lora_name"], "default_hero_v1.safetensors")
+            self.assertEqual(workflow["2"]["inputs"]["strength_model"], 0.75)
+            self.assertEqual(workflow["3"]["inputs"]["text"], "masterpiece, best quality, anime style, default_hero")
+            self.assertEqual(workflow["8"]["inputs"]["filename_prefix"], "anime_studio/default_hero/default_hero_v1")
+            self.assertEqual(
+                result.workflow_path,
+                root / "outputs" / "comfyui" / "default_hero" / "sd15_lora_txt2img_512_with_lora.json",
+            )
+
+    def test_lists_bundled_templates(self) -> None:
+        settings = load_settings(ROOT / "config" / "local_6gb.json")
+
+        templates = list_comfyui_templates(settings)
+
+        self.assertIn(
+            ROOT / "templates" / "comfyui" / "sd15_lora_txt2img_512.json",
+            templates,
+        )
 
 
 def sample_workflow_template() -> dict[str, object]:
