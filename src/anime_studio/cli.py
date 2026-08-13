@@ -14,6 +14,7 @@ from .comfyui_queue import (
     refresh_comfyui_job,
     submit_comfyui_job,
 )
+from .comfyui_results import import_comfyui_results
 from .comfyui_workflow_export import export_comfyui_workflow, list_comfyui_templates
 from .dataset_builder import build_lora_dataset
 from .frame_extraction import build_frame_extraction_plan, extract_frames
@@ -321,6 +322,27 @@ def build_parser() -> argparse.ArgumentParser:
         default=15.0,
         help="HTTP timeout in seconds.",
     )
+    comfyui_import_results = comfyui_subparsers.add_parser(
+        "import-results",
+        help="Import generated ComfyUI image outputs into a CharacterProfile asset folder.",
+    )
+    comfyui_import_results.add_argument("--character-id", required=True, help="Character id.")
+    comfyui_import_results.add_argument("--job-id", required=True, help="Queued job id.")
+    comfyui_import_results.add_argument(
+        "--comfyui-output-dir",
+        required=True,
+        help="ComfyUI output directory that contains generated image files.",
+    )
+    comfyui_import_results.add_argument(
+        "--queue",
+        default=None,
+        help="Queue JSON path. Defaults to queues/comfyui/jobs.json.",
+    )
+    comfyui_import_results.add_argument(
+        "--metadata-only",
+        action="store_true",
+        help="Record ComfyUI output references without copying files.",
+    )
     return parser
 
 
@@ -557,6 +579,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Prompt ID: {result.job.get('prompt_id', '')}")
         if result.job.get("error"):
             print(f"Error: {result.job['error']}")
+        return 0
+
+    if args.command == "comfyui" and args.comfyui_command == "import-results":
+        result = import_comfyui_results(
+            settings=settings,
+            character_id=args.character_id,
+            job_id=args.job_id,
+            comfyui_output_dir=args.comfyui_output_dir,
+            queue_path=args.queue,
+            metadata_only=args.metadata_only,
+        )
+        print(f"Imported ComfyUI results: {len(result.imported)}")
+        print(f"Results manifest: {result.results_manifest_path}")
+        print(f"Assets manifest: {result.assets_manifest_path}")
         return 0
 
     parser.error(f"Unknown command: {args.command}")
