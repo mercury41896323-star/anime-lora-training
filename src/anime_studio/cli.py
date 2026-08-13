@@ -7,6 +7,13 @@ from pathlib import Path
 from .asset_inventory import collect_asset_inventory
 from .character_manager import register_character_asset
 from .character_profile import create_character_profile
+from .comfyui_queue import (
+    DEFAULT_COMFYUI_BASE_URL,
+    enqueue_comfyui_workflow,
+    list_comfyui_jobs,
+    refresh_comfyui_job,
+    submit_comfyui_job,
+)
 from .comfyui_workflow_export import export_comfyui_workflow, list_comfyui_templates
 from .dataset_builder import build_lora_dataset
 from .frame_extraction import build_frame_extraction_plan, extract_frames
@@ -243,6 +250,77 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         help="Index of the LoRA entry to inject from the manifest.",
     )
+    comfyui_queue_add = comfyui_subparsers.add_parser(
+        "queue-add",
+        help="Add an exported workflow to the local ComfyUI submission queue.",
+    )
+    comfyui_queue_add.add_argument("--workflow", required=True, help="Exported workflow JSON.")
+    comfyui_queue_add.add_argument(
+        "--base-url",
+        default=DEFAULT_COMFYUI_BASE_URL,
+        help="ComfyUI server URL.",
+    )
+    comfyui_queue_add.add_argument(
+        "--queue",
+        default=None,
+        help="Queue JSON path. Defaults to queues/comfyui/jobs.json.",
+    )
+    comfyui_queue_submit = comfyui_subparsers.add_parser(
+        "queue-submit",
+        help="Submit a queued or exported workflow to the ComfyUI API.",
+    )
+    comfyui_queue_submit.add_argument("--job-id", default=None, help="Queued job id.")
+    comfyui_queue_submit.add_argument(
+        "--workflow",
+        default=None,
+        help="Workflow JSON to enqueue and submit in one step.",
+    )
+    comfyui_queue_submit.add_argument(
+        "--base-url",
+        default=None,
+        help="ComfyUI server URL. Defaults to the job URL or local ComfyUI.",
+    )
+    comfyui_queue_submit.add_argument(
+        "--queue",
+        default=None,
+        help="Queue JSON path. Defaults to queues/comfyui/jobs.json.",
+    )
+    comfyui_queue_submit.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Record the payload without calling ComfyUI.",
+    )
+    comfyui_queue_submit.add_argument(
+        "--timeout",
+        type=float,
+        default=15.0,
+        help="HTTP timeout in seconds.",
+    )
+    comfyui_queue_list = comfyui_subparsers.add_parser(
+        "queue-list",
+        help="List local ComfyUI queue jobs.",
+    )
+    comfyui_queue_list.add_argument(
+        "--queue",
+        default=None,
+        help="Queue JSON path. Defaults to queues/comfyui/jobs.json.",
+    )
+    comfyui_queue_refresh = comfyui_subparsers.add_parser(
+        "queue-refresh",
+        help="Refresh one submitted job from ComfyUI history.",
+    )
+    comfyui_queue_refresh.add_argument("--job-id", required=True, help="Queued job id.")
+    comfyui_queue_refresh.add_argument(
+        "--queue",
+        default=None,
+        help="Queue JSON path. Defaults to queues/comfyui/jobs.json.",
+    )
+    comfyui_queue_refresh.add_argument(
+        "--timeout",
+        type=float,
+        default=15.0,
+        help="HTTP timeout in seconds.",
+    )
     return parser
 
 
@@ -425,6 +503,60 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Manifest: {result.manifest_path}")
         print(f"Template: {result.template_path}")
         print(f"LoRA: {result.lora_name}")
+        return 0
+
+    if args.command == "comfyui" and args.comfyui_command == "queue-add":
+        result = enqueue_comfyui_workflow(
+            settings=settings,
+            workflow_path=args.workflow,
+            base_url=args.base_url,
+            queue_path=args.queue,
+        )
+        print(f"Queued ComfyUI workflow: {result.job['job_id']}")
+        print(f"Status: {result.job['status']}")
+        print(f"Queue: {result.queue_path}")
+        return 0
+
+    if args.command == "comfyui" and args.comfyui_command == "queue-submit":
+        result = submit_comfyui_job(
+            settings=settings,
+            job_id=args.job_id,
+            workflow_path=args.workflow,
+            base_url=args.base_url,
+            queue_path=args.queue,
+            dry_run=args.dry_run,
+            timeout_seconds=args.timeout,
+        )
+        print(f"ComfyUI queue job: {result.job['job_id']}")
+        print(f"Status: {result.job['status']}")
+        print(f"Prompt ID: {result.job.get('prompt_id', '')}")
+        print(f"Queue: {result.queue_path}")
+        if result.job.get("error"):
+            print(f"Error: {result.job['error']}")
+        return 0
+
+    if args.command == "comfyui" and args.comfyui_command == "queue-list":
+        jobs = list_comfyui_jobs(settings=settings, queue_path=args.queue)
+        if not jobs:
+            print("No ComfyUI queue jobs.")
+            return 0
+        for job in jobs:
+            prompt_id = job.get("prompt_id", "")
+            print(f"{job['job_id']}: {job['status']} / prompt={prompt_id} / {job['workflow_path']}")
+        return 0
+
+    if args.command == "comfyui" and args.comfyui_command == "queue-refresh":
+        result = refresh_comfyui_job(
+            settings=settings,
+            job_id=args.job_id,
+            queue_path=args.queue,
+            timeout_seconds=args.timeout,
+        )
+        print(f"ComfyUI queue job: {result.job['job_id']}")
+        print(f"Status: {result.job['status']}")
+        print(f"Prompt ID: {result.job.get('prompt_id', '')}")
+        if result.job.get("error"):
+            print(f"Error: {result.job['error']}")
         return 0
 
     parser.error(f"Unknown command: {args.command}")
