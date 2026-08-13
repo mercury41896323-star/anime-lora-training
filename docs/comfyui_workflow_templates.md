@@ -61,3 +61,13 @@ outputs/comfyui/sample_hero/sd15_lora_txt2img_512_with_lora.json
 ## 注意
 
 ComfyUIで実行する前に、manifest内のLoRAファイルがComfyUIの`models/loras`から参照できる状態になっているか確認してください。
+
+## 次の手順
+
+export済みworkflowは、軽量キューからComfyUI APIへ送れます。
+
+```powershell
+python -m anime_studio.cli comfyui queue-submit --workflow outputs/comfyui/sample_hero/sd15_lora_txt2img_512_with_lora.json
+```
+
+詳しくは`docs/comfyui_queue.md`を参照してください。
