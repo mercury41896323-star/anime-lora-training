@@ -10,63 +10,44 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from anime_studio.character_manager import register_character_asset
 from anime_studio.character_profile import create_character_profile, load_character_profile
-from anime_studio.kohya_config import KohyaLowVramSettings, generate_kohya_low_vram_config
+from anime_studio.lora_registry import register_lora_result
 from anime_studio.settings import load_settings
-from anime_studio.tagger import generate_auto_tag_records
 
 
-class KohyaConfigTest(unittest.TestCase):
-    def test_generates_low_vram_kohya_files(self) -> None:
+class LoraRegistryTest(unittest.TestCase):
+    def test_registers_trained_lora_result_in_profile(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             settings = write_settings(root)
-            source = root / "assets" / "raw" / "hero.png"
-            source.parent.mkdir(parents=True)
-            source.write_bytes(b"image")
-
             create_character_profile(
                 settings,
                 "sample_hero",
                 "Sample Hero",
                 trigger_tags=["sample_hero"],
             )
-            register_character_asset(settings, "sample_hero", source)
-            generate_auto_tag_records(settings, "sample_hero")
 
-            result = generate_kohya_low_vram_config(
+            result = register_lora_result(
                 settings=settings,
                 character_id="sample_hero",
-                kohya_settings=KohyaLowVramSettings(
-                    pretrained_model_name_or_path="models/sd15.safetensors",
-                    kohya_root="C:/tools/sd-scripts",
-                    max_train_epochs=3,
-                ),
+                model_path="outputs/lora/sample_hero/sample_hero_v1.safetensors",
+                source_config_dir="config/kohya/sample_hero",
+                display_name="Sample Hero v1",
+                notes="First low-VRAM training result.",
             )
 
-            dataset_toml = result.dataset_config.read_text(encoding="utf-8")
-            training_toml = result.training_config.read_text(encoding="utf-8")
-            run_script = result.run_script.read_text(encoding="utf-8")
-
-            self.assertEqual(result.dataset_image_count, 1)
-            self.assertIn("enable_bucket = true", dataset_toml)
-            self.assertIn("batch_size = 1", dataset_toml)
-            self.assertIn("class_tokens = 'sample_hero'", dataset_toml)
-            self.assertIn("profile = 'low_vram_rtx3050_6gb'", training_toml)
-            self.assertIn("gradient_checkpointing", training_toml)
-            self.assertIn("& 'accelerate' 'launch'", run_script)
-            self.assertIn("'--dataset_config'", run_script)
-
             profile = load_character_profile(settings, "sample_hero")
+            self.assertEqual(result.profile_path, root / "assets" / "processed" / "characters" / "sample_hero" / "profile.json")
+            self.assertEqual(profile.lora_files, ["outputs/lora/sample_hero/sample_hero_v1.safetensors"])
             self.assertEqual(len(profile.lora_artifacts), 1)
             artifact = profile.lora_artifacts[0]
-            self.assertEqual(artifact.artifact_id, "kohya_low_vram_config")
-            self.assertEqual(artifact.kind, "kohya_config")
-            self.assertEqual(artifact.status, "configured")
-            self.assertEqual(artifact.dataset_config, "config/kohya/sample_hero/dataset.toml")
+            self.assertEqual(artifact.artifact_id, "sample_hero_v1")
+            self.assertEqual(artifact.kind, "trained_lora")
+            self.assertEqual(artifact.status, "trained")
+            self.assertEqual(artifact.display_name, "Sample Hero v1")
+            self.assertEqual(artifact.config_dir, "config/kohya/sample_hero")
+            self.assertEqual(artifact.model_path, "outputs/lora/sample_hero/sample_hero_v1.safetensors")
             self.assertEqual(artifact.trigger_tags, ["sample_hero"])
-            self.assertEqual(artifact.metadata["dataset_image_count"], 1)
 
 
 def write_settings(root: Path):

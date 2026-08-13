@@ -22,6 +22,7 @@ AIを活用したアニメーション制作支援・学習・生成環境を構
 - 手動タグsidecarの作成
 - LoRA学習用データセット生成
 - Kohya_ss / sd-scripts向け低VRAM LoRA設定生成
+- LoRA設定・学習結果のCharacterProfile紐づけ
 
 ## まず動かすもの
 
@@ -95,6 +96,7 @@ anime-lora-training/
 │     ├─ dataset_builder.py
 │     ├─ frame_extraction.py
 │     ├─ kohya_config.py
+│     ├─ lora_registry.py
 │     ├─ tagger.py
 │     ├─ wd14_provider.py
 │     └─ settings.py
@@ -107,6 +109,7 @@ anime-lora-training/
    ├─ test_character_profile.py
    ├─ test_frame_extraction.py
    ├─ test_kohya_config.py
+   ├─ test_lora_registry.py
    ├─ test_settings.py
    └─ test_tagger_and_dataset.py
 ```
@@ -185,6 +188,15 @@ config/kohya/sample_hero/run_train.ps1
 ```
 
 このCLIは先にLoRA用データセットも生成し、`run_train.ps1`には`accelerate launch train_network.py`用のコマンドを保存します。実際に学習を始める前に、モデルパス、画像枚数、タグ、保存先を確認してください。
+
+生成したKohya設定は、キャラクターの`profile.json`内の`lora_artifacts`へ自動登録されます。学習が完了したあと、生成された`.safetensors`も同じProfileへ紐づけられます。
+
+```powershell
+python -m anime_studio.cli lora register-result --character-id sample_hero --model-path outputs/lora/sample_hero/sample_hero_v1.safetensors --source-config-dir config/kohya/sample_hero --name "Sample Hero v1"
+python -m anime_studio.cli lora list --character-id sample_hero
+```
+
+`lora_files`には既存ツールと連携しやすいモデルパス一覧を残し、`lora_artifacts`には設定ファイル、実行スクリプト、学習結果、状態、メモをまとめます。
 
 ## 6GB VRAM向け初期設定
 
@@ -357,6 +369,8 @@ config/kohya/sample_hero/run_train.ps1
 4. ComfyUIからのLoRA利用
 
 現在は、1の入口として低VRAM LoRA設定ファイル生成を追加しています。実際の学習実行は、設定内容を確認してから手動で開始する方針です。
+
+また、生成済み設定と学習後のLoRAモデルをCharacterProfileへ紐づける台帳を追加しています。これにより、どの設定からどのLoRAが生まれたかをキャラクター単位で追跡できます。
 
 ### Phase 4: ショット制作
 

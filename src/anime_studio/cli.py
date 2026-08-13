@@ -10,6 +10,7 @@ from .character_profile import create_character_profile
 from .dataset_builder import build_lora_dataset
 from .frame_extraction import build_frame_extraction_plan, extract_frames
 from .kohya_config import KohyaLowVramSettings, generate_kohya_low_vram_config
+from .lora_registry import list_lora_artifacts, register_lora_result
 from .settings import load_settings
 from .tagger import finalize_tag_sidecars, generate_auto_tag_records, update_manual_tags
 
@@ -169,6 +170,25 @@ def build_parser() -> argparse.ArgumentParser:
     kohya.add_argument("--network-dim", type=int, default=16, help="LoRA rank.")
     kohya.add_argument("--network-alpha", type=int, default=8, help="LoRA alpha.")
     kohya.add_argument("--learning-rate", default="1e-4", help="Learning rate.")
+    lora_register = lora_subparsers.add_parser(
+        "register-result",
+        help="Link a trained LoRA model file to a CharacterProfile.",
+    )
+    lora_register.add_argument("--character-id", required=True, help="Character id to update.")
+    lora_register.add_argument("--model-path", required=True, help="Trained LoRA model path.")
+    lora_register.add_argument(
+        "--source-config-dir",
+        default=None,
+        help="Kohya config directory used for this training run.",
+    )
+    lora_register.add_argument("--name", default=None, help="Display name for this LoRA result.")
+    lora_register.add_argument("--notes", default="", help="Short training notes.")
+    lora_register.add_argument("--status", default="trained", help="Result status.")
+    lora_list = lora_subparsers.add_parser(
+        "list",
+        help="List LoRA configs and results linked to a CharacterProfile.",
+    )
+    lora_list.add_argument("--character-id", required=True, help="Character id to inspect.")
     return parser
 
 
@@ -290,6 +310,32 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Wrote Kohya config directory: {result.config_dir}")
         print(f"Dataset images: {result.dataset_image_count}")
         print(f"Run script: {result.run_script}")
+        print(f"Linked CharacterProfile: {result.profile_path}")
+        return 0
+
+    if args.command == "lora" and args.lora_command == "register-result":
+        result = register_lora_result(
+            settings=settings,
+            character_id=args.character_id,
+            model_path=args.model_path,
+            source_config_dir=args.source_config_dir,
+            display_name=args.name,
+            notes=args.notes,
+            status=args.status,
+        )
+        print(f"Linked LoRA result: {result.artifact.display_name}")
+        print(f"Model path: {result.artifact.model_path}")
+        print(f"CharacterProfile: {result.profile_path}")
+        return 0
+
+    if args.command == "lora" and args.lora_command == "list":
+        artifacts = list_lora_artifacts(settings, args.character_id)
+        if not artifacts:
+            print("No LoRA artifacts linked.")
+            return 0
+        for artifact in artifacts:
+            target = artifact.model_path or artifact.config_dir
+            print(f"{artifact.artifact_id}: {artifact.kind} / {artifact.status} / {target}")
         return 0
 
     parser.error(f"Unknown command: {args.command}")

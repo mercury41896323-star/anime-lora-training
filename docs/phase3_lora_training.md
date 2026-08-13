@@ -26,6 +26,14 @@ config/kohya/sample_hero/run_train.ps1
 
 `run_train.ps1`はPowerShellから手動実行するためのラッパーです。
 
+設定生成後、キャラクターの`profile.json`には次のような`lora_artifacts`項目が自動追加されます。
+
+```text
+assets/processed/characters/sample_hero/profile.json
+```
+
+この項目には、Kohya設定フォルダ、dataset設定、training設定、実行スクリプト、trigger tag、データセット画像数が保存されます。
+
 ## Low-VRAM Defaults
 
 - Stable Diffusion 1.5系を想定
@@ -49,6 +57,22 @@ config/kohya/sample_hero/run_train.ps1
 - `output_dir`と`logging_dir`の保存先が意図通り
 - 6GB VRAMで不安定な場合は`network_dim`、`resolution`、`epochs`を下げる
 
+## Register Training Result
+
+学習後に`.safetensors`が生成されたら、CharacterProfileへ結果を登録します。
+
+```powershell
+python -m anime_studio.cli lora register-result --character-id sample_hero --model-path outputs/lora/sample_hero/sample_hero_v1.safetensors --source-config-dir config/kohya/sample_hero --name "Sample Hero v1"
+```
+
+登録後は次で確認できます。
+
+```powershell
+python -m anime_studio.cli lora list --character-id sample_hero
+```
+
+`profile.json`の`lora_files`にはモデルパス一覧を保存し、`lora_artifacts`には設定・結果・状態・メモを保存します。
+
 ## Next Step
 
-次は、生成済みLoRA設定と学習結果をCharacterProfileへ紐づける管理ファイルを追加します。
+次は、登録済みLoRAをComfyUIやUnity側の制作設定から参照するための軽量なmanifestを追加します。

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .character_profile import load_character_profile, validate_character_id
 from .dataset_builder import build_lora_dataset
+from .lora_registry import link_kohya_config
 from .settings import AppSettings
 
 
@@ -35,6 +36,7 @@ class KohyaConfigResult:
     dataset_config: Path
     training_config: Path
     run_script: Path
+    profile_path: Path
     dataset_image_count: int
     command: list[str]
 
@@ -96,6 +98,17 @@ def generate_kohya_low_vram_config(
         encoding="utf-8",
     )
     run_script.write_text(render_powershell_script(command), encoding="utf-8")
+    registry = link_kohya_config(
+        settings=settings,
+        character_id=character_id,
+        config_dir=config_dir,
+        dataset_config=dataset_config,
+        training_config=training_config,
+        run_script=run_script,
+        output_name=output_name,
+        dataset_image_count=dataset.image_count,
+        trigger_tags=profile.trigger_tags,
+    )
 
     return KohyaConfigResult(
         character_id=character_id,
@@ -103,6 +116,7 @@ def generate_kohya_low_vram_config(
         dataset_config=dataset_config,
         training_config=training_config,
         run_script=run_script,
+        profile_path=registry.profile_path,
         dataset_image_count=dataset.image_count,
         command=command,
     )

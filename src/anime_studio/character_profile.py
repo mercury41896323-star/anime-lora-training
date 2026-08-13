@@ -12,6 +12,25 @@ CHARACTER_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{1,62}$")
 
 
 @dataclass(frozen=True)
+class LoraArtifact:
+    artifact_id: str
+    kind: str
+    status: str
+    display_name: str
+    config_dir: str = ""
+    dataset_config: str = ""
+    training_config: str = ""
+    run_script: str = ""
+    model_path: str = ""
+    output_name: str = ""
+    trigger_tags: list[str] = field(default_factory=list)
+    notes: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+    metadata: dict[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class CharacterProfile:
     character_id: str
     display_name: str
@@ -19,6 +38,7 @@ class CharacterProfile:
     appearance_notes: str = ""
     source_notes: str = ""
     lora_files: list[str] = field(default_factory=list)
+    lora_artifacts: list[LoraArtifact] = field(default_factory=list)
 
 
 def validate_character_id(character_id: str) -> None:
@@ -50,10 +70,7 @@ def create_character_profile(
     if profile_path.exists():
         raise FileExistsError(f"Character profile already exists: {profile_path}")
 
-    profile_path.write_text(
-        json.dumps(asdict(profile), ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    save_character_profile(settings, profile)
     return profile_path
 
 
@@ -72,4 +89,40 @@ def load_character_profile(settings: AppSettings, character_id: str) -> Characte
         appearance_notes=data.get("appearance_notes", ""),
         source_notes=data.get("source_notes", ""),
         lora_files=list(data.get("lora_files", [])),
+        lora_artifacts=[
+            lora_artifact_from_dict(item)
+            for item in data.get("lora_artifacts", [])
+        ],
+    )
+
+
+def save_character_profile(settings: AppSettings, profile: CharacterProfile) -> Path:
+    validate_character_id(profile.character_id)
+    profile_dir = settings.assets.processed / "characters" / profile.character_id
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    profile_path = profile_dir / "profile.json"
+    profile_path.write_text(
+        json.dumps(asdict(profile), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return profile_path
+
+
+def lora_artifact_from_dict(data: dict[str, object]) -> LoraArtifact:
+    return LoraArtifact(
+        artifact_id=str(data["artifact_id"]),
+        kind=str(data["kind"]),
+        status=str(data["status"]),
+        display_name=str(data["display_name"]),
+        config_dir=str(data.get("config_dir", "")),
+        dataset_config=str(data.get("dataset_config", "")),
+        training_config=str(data.get("training_config", "")),
+        run_script=str(data.get("run_script", "")),
+        model_path=str(data.get("model_path", "")),
+        output_name=str(data.get("output_name", "")),
+        trigger_tags=list(data.get("trigger_tags", [])),
+        notes=str(data.get("notes", "")),
+        created_at=str(data.get("created_at", "")),
+        updated_at=str(data.get("updated_at", "")),
+        metadata=dict(data.get("metadata", {})),
     )
