@@ -1,0 +1,2 @@
+# Optional test runner. The test suite also works with: python -m unittest
+pytest>=8.0

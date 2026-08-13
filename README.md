@@ -8,6 +8,32 @@ AIを活用したアニメーション制作支援・学習・生成環境を構
 
 単純な動画生成ツールではなく、アニメ制作に必要な素材・キャラクター・カメラ・ライティング・ショット情報を一貫して管理し、少ない計算資源でも段階的に制作できることを重視します。
 
+## 現在のステータス
+
+**Project Restart - Phase 1 基盤構築開始**
+
+最初の実装として、RTX 3050 6GB VRAM環境を前提にした軽量なプロジェクト骨格と、GPUを使わずに動作確認できる素材インベントリ生成CLIを追加しました。
+
+## まず動かすもの
+
+この段階では重いAIモデルやGPU処理は使いません。まず素材置き場を確認し、プロジェクトがローカルで動くことを検証します。
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+$env:PYTHONPATH = "src"
+python -m anime_studio.cli inventory --pretty
+```
+
+PowerShell用の簡易スクリプトも用意しています。
+
+```powershell
+.\scripts\run_inventory.ps1
+```
+
+実行すると `assets/raw` を走査し、`assets/processed/inventory.json` に素材一覧を出力します。
+
 ## 開発方針
 
 - 目的は「AIを使ったアニメ制作」に集中する
@@ -31,6 +57,59 @@ AIを活用したアニメーション制作支援・学習・生成環境を構
 - 画像理解・タグ補助: Llama-3-Vision
 - 制御: ControlNet
 - 動画・画像処理: FFmpeg / OpenCV
+
+## 初期構成
+
+```text
+anime-lora-training/
+├─ README.md
+├─ pyproject.toml
+├─ requirements.txt
+├─ requirements-dev.txt
+├─ config/
+│  └─ local_6gb.json
+├─ docs/
+│  └─ development_start.md
+├─ scripts/
+│  └─ run_inventory.ps1
+├─ src/
+│  └─ anime_studio/
+│     ├─ __init__.py
+│     ├─ asset_inventory.py
+│     ├─ cli.py
+│     └─ settings.py
+├─ assets/
+│  ├─ raw/
+│  └─ processed/
+└─ tests/
+   └─ test_asset_inventory.py
+```
+
+## 最小プロトタイプ
+
+### Asset Inventory CLI
+
+`assets/raw` に置いた画像・動画・その他ファイルを分類し、軽量なJSONとして出力します。
+
+目的:
+
+- Asset Pipelineの入口を作る
+- GPUなしで動作確認できる状態にする
+- 将来のフレーム抽出、タグ付け、CharacterProfile生成へつなげる
+
+対応拡張子は `config/local_6gb.json` で管理します。
+
+## 6GB VRAM向け初期設定
+
+`config/local_6gb.json` では、低VRAM環境向けに以下を初期値としています。
+
+- SD 1.5系を優先
+- ドラフト解像度は512x512
+- バッチサイズは1
+- fp16を前提
+- LoRA学習ではgradient checkpointingとlatent cacheを使う方針
+
+この設定はまだ実際の生成・学習を起動しません。今後ComfyUIやKohya_ss連携を追加するときの共通設定として使います。
 
 ## システム構成
 
@@ -215,27 +294,3 @@ AIを活用したアニメーション制作支援・学習・生成環境を構
 このプロジェクトでは、利用可能なPC性能を考慮し、**RTX 3050 6GB VRAMで実用的に動作すること**を重要な基準とします。
 
 高性能GPUを前提とした構成をそのまま採用するのではなく、解像度・バッチサイズ・モデルサイズ・生成方法などを調整しながら、限られたVRAMで制作パイプラインを成立させます。
-
-## リポジトリ構成（予定）
-
-```text
-anime-lora-training/
-├─ README.md
-├─ docs/
-├─ unity/
-├─ python/
-├─ configs/
-├─ scripts/
-├─ models/
-├─ datasets/
-├─ assets/
-└─ tests/
-```
-
-実際の構成は開発の進行に合わせて調整します。
-
-## 現在のステータス
-
-**Project Restart — 基盤構築前**
-
-まずは開発環境とプロジェクト構造を整理し、最小構成のプロトタイプから再スタートします。

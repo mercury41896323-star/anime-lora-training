@@ -1,0 +1,30 @@
+{
+  "runtime": {
+    "name": "rtx3050_6gb_local",
+    "max_vram_gb": 6.0,
+    "target_gpu_utilization": 0.8,
+    "target_gpu_temp_c": 60
+  },
+  "generation_defaults": {
+    "stable_diffusion_family": "sd15",
+    "draft_width": 512,
+    "draft_height": 512,
+    "batch_size": 1,
+    "precision": "fp16"
+  },
+  "training_defaults": {
+    "network_module": "lora",
+    "train_batch_size": 1,
+    "gradient_checkpointing": true,
+    "mixed_precision": "fp16",
+    "cache_latents": true
+  },
+  "assets": {
+    "raw_dir": "assets/raw",
+    "processed_dir": "assets/processed"
+  },
+  "asset_types": {
+    "image_extensions": [".png", ".jpg", ".jpeg", ".webp"],
+    "video_extensions": [".mp4", ".mov", ".mkv", ".webm"]
+  }
+}
