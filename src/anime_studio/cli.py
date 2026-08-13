@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .asset_inventory import collect_asset_inventory
+from .asset_library import collect_asset_library, write_asset_library_index
 from .character_manager import register_character_asset
 from .character_profile import create_character_profile
 from .comfyui_queue import (
@@ -22,6 +23,7 @@ from .kohya_config import KohyaLowVramSettings, generate_kohya_low_vram_config
 from .lora_manifest import generate_lora_manifest
 from .lora_registry import list_lora_artifacts, register_lora_result
 from .settings import load_settings
+from .storyboard import add_shot, create_storyboard, list_storyboard_shots
 from .tagger import finalize_tag_sidecars, generate_auto_tag_records, update_manual_tags
 
 
@@ -52,6 +54,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Pretty-print JSON output.",
     )
 
+    library = subparsers.add_parser(
+        "library",
+        help="Browse and export the lightweight Asset Library.",
+    )
+    library_subparsers = library.add_subparsers(dest="library_command", required=True)
+    library_list = library_subparsers.add_parser(
+        "list",
+        help="List CharacterProfile assets across the project.",
+    )
+    add_asset_library_filters(library_list)
+    library_list.add_argument(
+        "--json",
+        action="store_true",
+        help="Print full JSON records.",
+    )
+    library_index = library_subparsers.add_parser(
+        "index",
+        help="Write a reusable Asset Library index JSON.",
+    )
+    add_asset_library_filters(library_index)
+    library_index.add_argument(
+        "--output",
+        default="assets/processed/library_index.json",
+        help="Output index JSON path.",
+    )
+
     character = subparsers.add_parser(
         "character",
         help="Create and manage lightweight character metadata.",
@@ -75,6 +103,46 @@ def build_parser() -> argparse.ArgumentParser:
     )
     character_register.add_argument("--id", required=True, help="Stable character id.")
     character_register.add_argument("--source", required=True, help="Source asset path.")
+
+    storyboard = subparsers.add_parser(
+        "storyboard",
+        help="Create lightweight storyboards and shot lists.",
+    )
+    storyboard_subparsers = storyboard.add_subparsers(dest="storyboard_command", required=True)
+    storyboard_init = storyboard_subparsers.add_parser(
+        "init",
+        help="Create a storyboard JSON file.",
+    )
+    storyboard_init.add_argument("--id", required=True, help="Stable story id.")
+    storyboard_init.add_argument("--title", required=True, help="Storyboard title.")
+    storyboard_add_shot = storyboard_subparsers.add_parser(
+        "add-shot",
+        help="Append a shot to a storyboard.",
+    )
+    storyboard_add_shot.add_argument("--story-id", required=True, help="Storyboard id.")
+    storyboard_add_shot.add_argument("--shot-id", required=True, help="Stable shot id.")
+    storyboard_add_shot.add_argument("--title", required=True, help="Shot title.")
+    storyboard_add_shot.add_argument("--character-id", default="", help="Optional character id.")
+    storyboard_add_shot.add_argument("--prompt", default="", help="Draft generation prompt.")
+    storyboard_add_shot.add_argument(
+        "--duration",
+        type=float,
+        default=3.0,
+        help="Shot duration in seconds.",
+    )
+    storyboard_add_shot.add_argument("--camera", default="", help="Camera note.")
+    storyboard_add_shot.add_argument("--lighting", default="", help="Lighting note.")
+    storyboard_add_shot.add_argument("--notes", default="", help="Shot notes.")
+    storyboard_list = storyboard_subparsers.add_parser(
+        "list",
+        help="List shots in a storyboard.",
+    )
+    storyboard_list.add_argument("--story-id", required=True, help="Storyboard id.")
+    storyboard_list.add_argument(
+        "--json",
+        action="store_true",
+        help="Print full JSON records.",
+    )
 
     frames = subparsers.add_parser(
         "frames",
@@ -346,6 +414,13 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def add_asset_library_filters(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--character-id", default=None, help="Filter by character id.")
+    parser.add_argument("--kind", default=None, help="Filter by asset kind.")
+    parser.add_argument("--source", default=None, help="Filter by asset source.")
+    parser.add_argument("--query", default=None, help="Search text across asset fields.")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -374,6 +449,37 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
+    if args.command == "library" and args.library_command == "list":
+        items = collect_asset_library(
+            settings=settings,
+            character_id=args.character_id,
+            kind=args.kind,
+            source=args.source,
+            query=args.query,
+        )
+        if args.json:
+            print(json.dumps([item.__dict__ for item in items], ensure_ascii=False, indent=2))
+            return 0
+        if not items:
+            print("No library assets found.")
+            return 0
+        for item in items:
+            status = "ok" if item.exists else "missing"
+            print(f"{item.character_id}: {item.kind} / {item.source} / {status} / {item.stored_path}")
+        return 0
+
+    if args.command == "library" and args.library_command == "index":
+        output_path = write_asset_library_index(
+            settings=settings,
+            output_path=args.output,
+            character_id=args.character_id,
+            kind=args.kind,
+            source=args.source,
+            query=args.query,
+        )
+        print(f"Wrote Asset Library index: {output_path}")
+        return 0
+
     if args.command == "character" and args.character_command == "init":
         profile_path = create_character_profile(
             settings=settings,
@@ -391,6 +497,43 @@ def main(argv: list[str] | None = None) -> int:
             source_path=args.source,
         )
         print(f"Registered {asset.kind} asset: {asset.stored_path}")
+        return 0
+
+    if args.command == "storyboard" and args.storyboard_command == "init":
+        storyboard_path = create_storyboard(
+            settings=settings,
+            story_id=args.id,
+            title=args.title,
+        )
+        print(f"Wrote storyboard: {storyboard_path}")
+        return 0
+
+    if args.command == "storyboard" and args.storyboard_command == "add-shot":
+        storyboard_path = add_shot(
+            settings=settings,
+            story_id=args.story_id,
+            shot_id=args.shot_id,
+            title=args.title,
+            character_id=args.character_id,
+            prompt=args.prompt,
+            duration_seconds=args.duration,
+            camera=args.camera,
+            lighting=args.lighting,
+            notes=args.notes,
+        )
+        print(f"Updated storyboard: {storyboard_path}")
+        return 0
+
+    if args.command == "storyboard" and args.storyboard_command == "list":
+        shots = list_storyboard_shots(settings=settings, story_id=args.story_id)
+        if args.json:
+            print(json.dumps([shot.__dict__ for shot in shots], ensure_ascii=False, indent=2))
+            return 0
+        if not shots:
+            print("No storyboard shots.")
+            return 0
+        for shot in shots:
+            print(f"{shot.order}. {shot.shot_id}: {shot.title} / {shot.character_id} / {shot.duration_seconds}s")
         return 0
 
     if args.command == "frames":
