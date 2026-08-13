@@ -24,6 +24,13 @@ Generate editable auto tag records:
 python -m anime_studio.cli tags auto --character-id sample_hero --extra-tag anime_style
 ```
 
+Use WD14 when optional dependencies and model files are available:
+
+```powershell
+pip install -r requirements-wd14.txt
+python -m anime_studio.cli tags auto --character-id sample_hero --provider wd14
+```
+
 Add or reject manual tags:
 
 ```powershell
@@ -57,6 +64,8 @@ Each image can have an editable `.tags.json` file with these layers:
 - `rejected_tags`: excluded from final captions
 - `final_tags`: generated from auto plus manual minus rejected
 
-## WD14 Plan
+## WD14 Provider
 
-The current auto provider is intentionally dependency-free. A later WD14 module should write into `auto_tags` while preserving `manual_tags` and `rejected_tags`. The final dataset format stays the same: one image file paired with one `.txt` caption file.
+The default `baseline` provider is intentionally dependency-free. The optional `wd14` provider downloads/uses `model.onnx` and `selected_tags.csv` under `models/wd14`.
+
+WD14 writes into `auto_tags` while preserving `manual_tags` and `rejected_tags`. The final dataset format stays the same: one image file paired with one `.txt` caption file.

@@ -25,11 +25,17 @@ class DatasetPaths:
 
 
 @dataclass(frozen=True)
+class ModelPaths:
+    wd14: Path
+
+
+@dataclass(frozen=True)
 class AppSettings:
     project_root: Path
     runtime: RuntimeProfile
     assets: AssetPaths
     datasets: DatasetPaths
+    models: ModelPaths
     image_extensions: tuple[str, ...]
     video_extensions: tuple[str, ...]
 
@@ -42,6 +48,7 @@ def load_settings(config_path: str | Path) -> AppSettings:
     runtime = data["runtime"]
     assets = data["assets"]
     datasets = data.get("datasets", {})
+    models = data.get("models", {})
 
     return AppSettings(
         project_root=base_dir.resolve(),
@@ -57,6 +64,9 @@ def load_settings(config_path: str | Path) -> AppSettings:
         ),
         datasets=DatasetPaths(
             lora=(base_dir / datasets.get("lora_dir", "datasets/lora")).resolve(),
+        ),
+        models=ModelPaths(
+            wd14=(base_dir / models.get("wd14_dir", "models/wd14")).resolve(),
         ),
         image_extensions=tuple(data["asset_types"]["image_extensions"]),
         video_extensions=tuple(data["asset_types"]["video_extensions"]),

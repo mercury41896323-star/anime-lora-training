@@ -17,6 +17,7 @@ from anime_studio.settings import load_settings
 from anime_studio.tagger import (
     finalize_tag_sidecars,
     generate_auto_tag_records,
+    generate_provider_tags,
     tag_record_path,
     update_manual_tags,
 )
@@ -78,6 +79,13 @@ class TaggerAndDatasetTest(unittest.TestCase):
                 caption.read_text(encoding="utf-8").strip(),
                 "sample_hero, anime_style, blue_hair",
             )
+
+    def test_rejects_unknown_tag_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            settings = write_settings(Path(temp_dir))
+
+            with self.assertRaisesRegex(ValueError, "Unknown tag provider"):
+                generate_provider_tags(settings, Path("hero.png"), "unknown")
 
 
 def write_settings(root: Path):

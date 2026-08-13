@@ -75,6 +75,7 @@ anime-lora-training/
 ├─ pyproject.toml
 ├─ requirements.txt
 ├─ requirements-dev.txt
+├─ requirements-wd14.txt
 ├─ config/
 │  └─ local_6gb.json
 ├─ docs/
@@ -93,6 +94,7 @@ anime-lora-training/
 │     ├─ dataset_builder.py
 │     ├─ frame_extraction.py
 │     ├─ tagger.py
+│     ├─ wd14_provider.py
 │     └─ settings.py
 ├─ assets/
 │  ├─ raw/
@@ -102,7 +104,8 @@ anime-lora-training/
    ├─ test_character_manager.py
    ├─ test_character_profile.py
    ├─ test_frame_extraction.py
-   └─ test_tagger_and_dataset.py
+   ├─ test_tagger_and_dataset.py
+   └─ test_wd14_provider.py
 ```
 
 ## 最小プロトタイプ
@@ -153,7 +156,14 @@ python -m anime_studio.cli tags finalize --character-id sample_hero
 python -m anime_studio.cli dataset build-lora --character-id sample_hero
 ```
 
-WD14本体はまだ同梱していません。まずは`.tags.json`に`auto_tags`、`manual_tags`、`rejected_tags`、`final_tags`を保存し、後からWD14出力を`auto_tags`へ差し替えます。
+WD14は任意providerとして追加しています。使う場合だけ追加依存を入れ、`auto_tags`へWD14出力を書き込みます。
+
+```powershell
+pip install -r requirements-wd14.txt
+python -m anime_studio.cli tags auto --character-id sample_hero --provider wd14
+```
+
+`.tags.json`には`auto_tags`、`manual_tags`、`rejected_tags`、`final_tags`を保存します。WD14で自動タグを再生成しても、手動修正は残せます。
 
 ## 6GB VRAM向け初期設定
 
@@ -316,7 +326,7 @@ WD14本体はまだ同梱していません。まずは`.tags.json`に`auto_tags
 4. WD14タグ付け
 5. 学習データセット生成
 
-現在は、1-3と5の最小実装が入り、4は自動タグ記録、手動修正、最終caption生成の入口を用意しています。
+現在は、1-3と5の最小実装が入り、4はbaseline自動タグと任意WD14 provider、手動修正、最終caption生成の入口を用意しています。
 
 ### Phase 3: LoRA学習
 

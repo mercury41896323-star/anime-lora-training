@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .character_profile import load_character_profile, validate_character_id
 from .settings import AppSettings
+from .wd14_provider import WD14Config, generate_wd14_tags
 
 
 @dataclass(frozen=True)
@@ -48,13 +49,8 @@ def generate_auto_tag_records(
         if existing and not overwrite:
             continue
 
-        auto_tags = dedupe_tags(
-            [
-                *profile.trigger_tags,
-                *infer_filename_tags(image_path),
-                *(extra_tags or []),
-            ]
-        )
+        auto_tags = generate_provider_tags(settings, image_path, provider)
+        auto_tags = dedupe_tags([*profile.trigger_tags, *auto_tags, *(extra_tags or [])])
         record = ImageTagRecord(
             image_path=str(image_path),
             provider=provider,
@@ -175,6 +171,18 @@ def infer_filename_tags(image_path: Path) -> list[str]:
         for token in re.split(r"[^a-z0-9]+", stem)
         if token and not token.isdigit()
     ]
+
+
+def generate_provider_tags(settings: AppSettings, image_path: Path, provider: str) -> list[str]:
+    if provider == "baseline":
+        return infer_filename_tags(image_path)
+    if provider == "wd14":
+        return generate_wd14_tags(
+            image_path=image_path,
+            model_dir=settings.models.wd14,
+            config=WD14Config(),
+        )
+    raise ValueError(f"Unknown tag provider: {provider}")
 
 
 def dedupe_tags(tags: list[str]) -> list[str]:

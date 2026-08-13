@@ -26,6 +26,9 @@
   "datasets": {
     "lora_dir": "datasets/lora"
   },
+  "models": {
+    "wd14_dir": "models/wd14"
+  },
   "asset_types": {
     "image_extensions": [".png", ".jpg", ".jpeg", ".webp"],
     "video_extensions": [".mp4", ".mov", ".mkv", ".webm"]

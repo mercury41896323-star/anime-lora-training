@@ -1,0 +1,5 @@
+# Optional dependencies for WD14 auto tagging.
+onnxruntime>=1.17.0
+Pillow>=10.0
+numpy>=1.26
+huggingface_hub>=0.24

@@ -49,3 +49,10 @@ python -m anime_studio.cli tags finalize --character-id sample_hero
 ```
 
 Auto tags are saved separately from manual edits so tags can be regenerated later without losing human corrections.
+
+To use WD14 instead of the lightweight baseline provider:
+
+```powershell
+pip install -r requirements-wd14.txt
+python -m anime_studio.cli tags auto --character-id sample_hero --provider wd14
+```
