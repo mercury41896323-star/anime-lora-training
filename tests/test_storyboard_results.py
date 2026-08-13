@@ -18,6 +18,11 @@ from anime_studio.storyboard_results import (
     link_shot_result,
     list_shot_results,
 )
+from anime_studio.storyboard_review import (
+    read_raw_shot_results,
+    set_shot_result_decision,
+    write_storyboard_preview,
+)
 
 
 class StoryboardResultsTest(unittest.TestCase):
@@ -44,6 +49,53 @@ class StoryboardResultsTest(unittest.TestCase):
             self.assertEqual(results[0].shot_id, "shot_001")
             self.assertEqual(results[0].stored_path, "outputs/manual/opening.png")
             self.assertTrue(linked.manifest_path.exists())
+
+    def test_selects_one_result_and_writes_preview(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            settings = write_settings(root)
+            create_storyboard(settings, "pilot_scene", "Pilot Scene")
+            add_shot(
+                settings=settings,
+                story_id="pilot_scene",
+                shot_id="shot_001",
+                title="Opening",
+                prompt="soft light",
+            )
+            first = root / "outputs" / "manual" / "opening_a.png"
+            second = root / "outputs" / "manual" / "opening_b.png"
+            first.parent.mkdir(parents=True)
+            first.write_bytes(b"image-a")
+            second.write_bytes(b"image-b")
+
+            first_link = link_shot_result(settings, "pilot_scene", "shot_001", first)
+            second_link = link_shot_result(settings, "pilot_scene", "shot_001", second)
+            set_shot_result_decision(
+                settings=settings,
+                story_id="pilot_scene",
+                result_id=first_link.linked[0].result_id,
+                decision="selected",
+                notes="Good silhouette.",
+            )
+            set_shot_result_decision(
+                settings=settings,
+                story_id="pilot_scene",
+                result_id=second_link.linked[0].result_id,
+                decision="selected",
+                notes="Better expression.",
+            )
+
+            results = read_raw_shot_results(settings, "pilot_scene")
+            preview = write_storyboard_preview(settings, "pilot_scene")
+            html = preview.preview_path.read_text(encoding="utf-8")
+
+            decisions = {str(result["result_id"]): str(result.get("decision", "candidate")) for result in results}
+            self.assertEqual(decisions[first_link.linked[0].result_id], "candidate")
+            self.assertEqual(decisions[second_link.linked[0].result_id], "selected")
+            self.assertIn("Better expression.", html)
+            self.assertIn("opening_b.png", html)
+            self.assertEqual(preview.result_count, 2)
+            self.assertEqual(preview.selected_count, 1)
 
     def test_links_imported_comfyui_result_using_workflow_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
