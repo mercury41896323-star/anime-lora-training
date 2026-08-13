@@ -159,9 +159,25 @@ python -m anime_studio.storyboard_cli preview --story-id pilot_scene
 storyboards/pilot_scene/preview.html
 ```
 
+## 採用済み Shot だけを Unity / 編集用 manifest へ出力する
+
+`selected` になっている Shot result だけを、Shot 順に並べた軽量 JSON として書き出します。
+Unity Timeline や外部編集ツールは、この manifest を読むことで「どの Shot にどの生成結果を使うか」を判断できます。
+
+```powershell
+python -m anime_studio.storyboard_cli export-selected --story-id pilot_scene
+```
+
+出力先:
+
+```text
+manifests/storyboards/pilot_scene/selected_shots.json
+```
+
+まだ採用結果がない Shot は `missing_shots` に残ります。
+
 ## 次の拡張候補
 
 - Shot ごとの negative prompt
 - Shot ごとの seed / width / height / steps
-- 採用結果だけを Unity Timeline manifest へ出力
 - ShotEditor UI
