@@ -61,6 +61,7 @@ namespace AIAnimeStudio.Editor
             string timelinePath = AssetDatabase.GenerateUniqueAssetPath(
                 timelineFolder + "/" + SafeFileName(rootName) + ".playable"
             );
+            string animationFolder = EnsureAssetFolder(timelineFolder + "/CameraAnimations");
 
             AssetDatabase.CreateAsset(timeline, timelinePath);
 
@@ -69,17 +70,28 @@ namespace AIAnimeStudio.Editor
             foreach (SelectedShotClip shot in OrderedShots(library.shots))
             {
                 GameObject shotObject = CreateShotPreviewObject(shot, root.transform, visualIndex);
-                CreateShotCameraRig(shot, shotObject.transform);
+                GameObject cameraObject = CreateShotCameraRig(shot, shotObject.transform);
                 CreateShotLightingRig(shot, shotObject.transform);
+                double shotStartSeconds = cursorSeconds;
+                double shotDurationSeconds = ShotDuration(shot);
                 ActivationTrack track = timeline.CreateTrack<ActivationTrack>(
                     null,
                     string.IsNullOrEmpty(shot.timelineClipName) ? string.Format("{0:000}_{1}", shot.order, shot.shotId) : shot.timelineClipName
                 );
                 TimelineClip clip = track.CreateDefaultClip();
                 clip.displayName = string.IsNullOrEmpty(shot.title) ? shot.timelineClipName : shot.title;
-                clip.start = cursorSeconds;
-                clip.duration = ShotDuration(shot);
+                clip.start = shotStartSeconds;
+                clip.duration = shotDurationSeconds;
                 director.SetGenericBinding(track, shotObject);
+                CreateCameraMovementTrack(
+                    timeline,
+                    director,
+                    shot,
+                    cameraObject,
+                    animationFolder,
+                    shotStartSeconds,
+                    shotDurationSeconds
+                );
                 cursorSeconds += clip.duration;
                 visualIndex++;
             }
@@ -127,7 +139,7 @@ namespace AIAnimeStudio.Editor
             return shotObject;
         }
 
-        private static void CreateShotCameraRig(SelectedShotClip shot, Transform parent)
+        private static GameObject CreateShotCameraRig(SelectedShotClip shot, Transform parent)
         {
             GameObject cameraObject = new GameObject("Camera_" + SafeFileName(ShotObjectName(shot)));
             cameraObject.transform.SetParent(parent);
@@ -140,6 +152,8 @@ namespace AIAnimeStudio.Editor
             camera.nearClipPlane = 0.1f;
             camera.farClipPlane = 100f;
             camera.depth = shot.order;
+            cameraObject.AddComponent<Animator>();
+            return cameraObject;
         }
 
         private static void CreateShotLightingRig(SelectedShotClip shot, Transform parent)
@@ -207,6 +221,150 @@ namespace AIAnimeStudio.Editor
             light.intensity = intensity;
             light.color = color;
             return light;
+        }
+
+        private static void CreateCameraMovementTrack(
+            TimelineAsset timeline,
+            PlayableDirector director,
+            SelectedShotClip shot,
+            GameObject cameraObject,
+            string animationFolder,
+            double startSeconds,
+            double durationSeconds
+        )
+        {
+            if (!HasCameraMovement(shot))
+            {
+                return;
+            }
+
+            AnimationClip animationClip = BuildCameraMovementClip(shot, cameraObject.transform, durationSeconds);
+            string animationPath = AssetDatabase.GenerateUniqueAssetPath(
+                animationFolder + "/" + SafeFileName("CameraMove_" + ShotObjectName(shot)) + ".anim"
+            );
+            AssetDatabase.CreateAsset(animationClip, animationPath);
+
+            AnimationTrack animationTrack = timeline.CreateTrack<AnimationTrack>(
+                null,
+                "CameraMove_" + ShotObjectName(shot)
+            );
+            TimelineClip movementClip = animationTrack.CreateClip<AnimationPlayableAsset>();
+            AnimationPlayableAsset playableAsset = movementClip.asset as AnimationPlayableAsset;
+            if (playableAsset != null)
+            {
+                playableAsset.clip = animationClip;
+            }
+
+            movementClip.displayName = "camera movement";
+            movementClip.start = startSeconds;
+            movementClip.duration = durationSeconds;
+            director.SetGenericBinding(animationTrack, cameraObject.GetComponent<Animator>());
+        }
+
+        private static AnimationClip BuildCameraMovementClip(
+            SelectedShotClip shot,
+            Transform cameraTransform,
+            double durationSeconds
+        )
+        {
+            float duration = Mathf.Max(0.1f, (float)durationSeconds);
+            Vector3 startPosition = cameraTransform.localPosition;
+            Vector3 endPosition = CameraMovementEndPosition(shot, startPosition);
+            Vector3 startEuler = cameraTransform.localEulerAngles;
+            Vector3 endEuler = CameraMovementEndEuler(shot, startEuler);
+
+            AnimationClip animationClip = new AnimationClip();
+            animationClip.frameRate = 24f;
+            animationClip.wrapMode = WrapMode.Once;
+            SetLinearCurve(animationClip, "localPosition.x", startPosition.x, endPosition.x, duration);
+            SetLinearCurve(animationClip, "localPosition.y", startPosition.y, endPosition.y, duration);
+            SetLinearCurve(animationClip, "localPosition.z", startPosition.z, endPosition.z, duration);
+            SetLinearCurve(animationClip, "localEulerAnglesRaw.x", startEuler.x, endEuler.x, duration);
+            SetLinearCurve(animationClip, "localEulerAnglesRaw.y", startEuler.y, endEuler.y, duration);
+            SetLinearCurve(animationClip, "localEulerAnglesRaw.z", startEuler.z, endEuler.z, duration);
+            return animationClip;
+        }
+
+        private static void SetLinearCurve(AnimationClip animationClip, string propertyName, float start, float end, float duration)
+        {
+            AnimationCurve curve = AnimationCurve.Linear(0f, start, duration, end);
+            animationClip.SetCurve("", typeof(Transform), propertyName, curve);
+        }
+
+        private static bool HasCameraMovement(SelectedShotClip shot)
+        {
+            string movement = CombinedLower(shot.cameraMovement, shot.cameraWork, shot.camera);
+            return HasText(movement) && !ContainsAny(movement, "static", "locked", "fixed", "none", "still");
+        }
+
+        private static Vector3 CameraMovementEndPosition(SelectedShotClip shot, Vector3 startPosition)
+        {
+            string movement = CombinedLower(shot.cameraMovement, shot.cameraWork, shot.camera);
+            Vector3 endPosition = startPosition;
+
+            if (ContainsAny(movement, "dolly in", "push in", "track in", "move in", "zoom in"))
+            {
+                endPosition.z += 0.9f;
+            }
+            else if (ContainsAny(movement, "dolly out", "pull back", "track out", "move out", "zoom out"))
+            {
+                endPosition.z -= 0.9f;
+            }
+
+            if (ContainsAny(movement, "truck left", "slide left", "move left"))
+            {
+                endPosition.x -= 0.7f;
+            }
+            else if (ContainsAny(movement, "truck right", "slide right", "move right"))
+            {
+                endPosition.x += 0.7f;
+            }
+
+            if (ContainsAny(movement, "crane up", "rise", "move up"))
+            {
+                endPosition.y += 0.5f;
+            }
+            else if (ContainsAny(movement, "crane down", "fall", "move down"))
+            {
+                endPosition.y -= 0.5f;
+            }
+
+            return endPosition;
+        }
+
+        private static Vector3 CameraMovementEndEuler(SelectedShotClip shot, Vector3 startEuler)
+        {
+            string movement = CombinedLower(shot.cameraMovement, shot.cameraWork, shot.camera);
+            Vector3 endEuler = startEuler;
+
+            if (ContainsAny(movement, "pan left"))
+            {
+                endEuler.y -= 8f;
+            }
+            else if (ContainsAny(movement, "pan right"))
+            {
+                endEuler.y += 8f;
+            }
+
+            if (ContainsAny(movement, "tilt up"))
+            {
+                endEuler.x -= 6f;
+            }
+            else if (ContainsAny(movement, "tilt down"))
+            {
+                endEuler.x += 6f;
+            }
+
+            if (ContainsAny(movement, "roll left"))
+            {
+                endEuler.z += 4f;
+            }
+            else if (ContainsAny(movement, "roll right"))
+            {
+                endEuler.z -= 4f;
+            }
+
+            return endEuler;
         }
 
         private static Vector3 CameraPosition(SelectedShotClip shot)
