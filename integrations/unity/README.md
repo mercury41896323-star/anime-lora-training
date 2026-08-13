@@ -13,7 +13,7 @@
 5. `SelectedShotLibrary.asset` を選択した状態で `AI Anime Studio > Create Timeline From Selected Shot Library` を選びます。
 6. `Assets/AIAnimeStudio/Timelines/<story_id>/` に Timeline asset が作成され、Scene に `PlayableDirector` 付きの親Objectが配置されます。
 
-Timeline生成には Unity の Timeline package が必要です。
+Timeline生成には Unity の Timeline package が必要です。Cinemachine package が入っている場合は、Shotごとに Virtual Camera も作成します。Cinemachine が無い場合でも通常の Camera だけで動くため、導入前のUnityプロジェクトでも壊れません。
 
 ## 取り込む内容
 
@@ -34,7 +34,13 @@ Timeline生成には Unity の Timeline package が必要です。
 
 各Shotの子Objectには、`camera_work` 由来の仮 `Camera` と、`lighting_setup` 由来の仮 `Light` も自動生成します。カメラは framing / angle / lens_mm をもとに距離・角度・画角を推定し、ライトは key / fill / rim / mood / time_of_day / color_palette をもとに簡易的な Directional Light を作ります。
 
-`cameraMovement` が `dolly in` / `pull back` / `pan left` / `tilt up` などを含む場合は、Camera用の `.anim` を `CameraAnimations` フォルダへ作り、Timelineに `AnimationTrack` として配置します。これは編集開始用の仮アニメーションなので、Unity側であとから自由に調整できます。
+## Cinemachine連携
+
+Cinemachine が導入されているUnityプロジェクトでは、各Shotに `VirtualCamera_<shot>` を自動作成します。Cinemachine 3 の `Unity.Cinemachine.CinemachineCamera` と、Cinemachine 2 の `Cinemachine.CinemachineVirtualCamera` の両方を検出します。
+
+Virtual Camera は通常Cameraと同じ仮位置・仮角度から始まり、`lens_mm` 由来の画角を可能な範囲で反映します。Sceneに Cinemachine Brain が無い場合は、最小の `Cinemachine_Brain_Camera` も作ります。
+
+`cameraMovement` が `dolly in` / `pull back` / `pan left` / `tilt up` などを含む場合は、CameraまたはVirtual Camera用の `.anim` を `CameraAnimations` フォルダへ作り、Timelineに `AnimationTrack` として配置します。これは編集開始用の仮アニメーションなので、Unity側であとから自由に調整できます。
 
 ## 低VRAM開発での位置づけ
 
@@ -44,4 +50,4 @@ ComfyUIで大量生成せず、まず採用済みの軽いShot単位manifestだ�
 
 - Timeline Clip にShotメモやpromptを表示する
 - 仮カメラ・仮ライト・仮移動のプリセットをJSONで調整可能にする
-- Cinemachine連携へ置き換える
+- Cinemachine Track / Shot Clip への正式対応を追加する

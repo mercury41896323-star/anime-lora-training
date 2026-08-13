@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Playables;
@@ -62,6 +63,7 @@ namespace AIAnimeStudio.Editor
                 timelineFolder + "/" + SafeFileName(rootName) + ".playable"
             );
             string animationFolder = EnsureAssetFolder(timelineFolder + "/CameraAnimations");
+            EnsureCinemachineBrain(root.transform);
 
             AssetDatabase.CreateAsset(timeline, timelinePath);
 
@@ -153,7 +155,14 @@ namespace AIAnimeStudio.Editor
             camera.farClipPlane = 100f;
             camera.depth = shot.order;
             cameraObject.AddComponent<Animator>();
-            return cameraObject;
+
+            GameObject virtualCameraObject = CreateCinemachineVirtualCamera(
+                shot,
+                parent,
+                cameraObject.transform,
+                camera.fieldOfView
+            );
+            return virtualCameraObject != null ? virtualCameraObject : cameraObject;
         }
 
         private static void CreateShotLightingRig(SelectedShotClip shot, Transform parent)
@@ -221,6 +230,147 @@ namespace AIAnimeStudio.Editor
             light.intensity = intensity;
             light.color = color;
             return light;
+        }
+
+        private static GameObject CreateCinemachineVirtualCamera(
+            SelectedShotClip shot,
+            Transform parent,
+            Transform sourceTransform,
+            float fieldOfView
+        )
+        {
+            Type virtualCameraType = FindCinemachineType(
+                "Unity.Cinemachine.CinemachineCamera, Unity.Cinemachine",
+                "Cinemachine.CinemachineVirtualCamera, Cinemachine"
+            );
+            if (virtualCameraType == null)
+            {
+                return null;
+            }
+
+            GameObject virtualCameraObject = new GameObject("VirtualCamera_" + SafeFileName(ShotObjectName(shot)));
+            virtualCameraObject.transform.SetParent(parent);
+            virtualCameraObject.transform.localPosition = sourceTransform.localPosition;
+            virtualCameraObject.transform.localRotation = sourceTransform.localRotation;
+            virtualCameraObject.transform.localScale = Vector3.one;
+
+            Component virtualCamera = virtualCameraObject.AddComponent(virtualCameraType);
+            virtualCameraObject.AddComponent<Animator>();
+            SetCinemachinePriority(virtualCamera, shot.order);
+            SetCinemachineFieldOfView(virtualCamera, fieldOfView);
+            return virtualCameraObject;
+        }
+
+        private static void EnsureCinemachineBrain(Transform parent)
+        {
+            Type brainType = FindCinemachineType(
+                "Unity.Cinemachine.CinemachineBrain, Unity.Cinemachine",
+                "Cinemachine.CinemachineBrain, Cinemachine"
+            );
+            if (brainType == null)
+            {
+                return;
+            }
+
+            Camera mainCamera = Camera.main;
+            GameObject brainObject;
+            if (mainCamera != null)
+            {
+                brainObject = mainCamera.gameObject;
+            }
+            else
+            {
+                brainObject = new GameObject("Cinemachine_Brain_Camera");
+                brainObject.transform.SetParent(parent);
+                brainObject.transform.localPosition = new Vector3(0f, 1.5f, -6f);
+                brainObject.transform.localRotation = Quaternion.Euler(10f, 0f, 0f);
+                brainObject.transform.localScale = Vector3.one;
+                mainCamera = brainObject.AddComponent<Camera>();
+                mainCamera.depth = -100;
+            }
+
+            if (brainObject.GetComponent(brainType) == null)
+            {
+                brainObject.AddComponent(brainType);
+            }
+        }
+
+        private static Type FindCinemachineType(params string[] typeNames)
+        {
+            foreach (string typeName in typeNames)
+            {
+                Type type = Type.GetType(typeName);
+                if (type != null)
+                {
+                    return type;
+                }
+            }
+
+            foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                foreach (string typeName in typeNames)
+                {
+                    string shortTypeName = typeName.Split(',')[0].Trim();
+                    Type type = assembly.GetType(shortTypeName);
+                    if (type != null)
+                    {
+                        return type;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static void SetCinemachinePriority(Component virtualCamera, int priority)
+        {
+            const BindingFlags bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            Type type = virtualCamera.GetType();
+            PropertyInfo priorityProperty = type.GetProperty("Priority", bindingFlags);
+            if (priorityProperty != null && priorityProperty.CanWrite && priorityProperty.PropertyType == typeof(int))
+            {
+                priorityProperty.SetValue(virtualCamera, priority, null);
+                return;
+            }
+
+            FieldInfo priorityField = type.GetField("m_Priority", bindingFlags);
+            if (priorityField != null && priorityField.FieldType == typeof(int))
+            {
+                priorityField.SetValue(virtualCamera, priority);
+            }
+        }
+
+        private static void SetCinemachineFieldOfView(Component virtualCamera, float fieldOfView)
+        {
+            const BindingFlags bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            Type type = virtualCamera.GetType();
+            FieldInfo lensField = type.GetField("m_Lens", bindingFlags);
+            if (lensField == null)
+            {
+                return;
+            }
+
+            object lens = lensField.GetValue(virtualCamera);
+            if (lens == null)
+            {
+                return;
+            }
+
+            Type lensType = lens.GetType();
+            PropertyInfo fieldOfViewProperty = lensType.GetProperty("FieldOfView", bindingFlags);
+            if (fieldOfViewProperty != null && fieldOfViewProperty.CanWrite)
+            {
+                fieldOfViewProperty.SetValue(lens, fieldOfView, null);
+                lensField.SetValue(virtualCamera, lens);
+                return;
+            }
+
+            FieldInfo fieldOfViewField = lensType.GetField("m_FieldOfView", bindingFlags);
+            if (fieldOfViewField != null)
+            {
+                fieldOfViewField.SetValue(lens, fieldOfView);
+                lensField.SetValue(virtualCamera, lens);
+            }
         }
 
         private static void CreateCameraMovementTrack(

@@ -37,7 +37,7 @@ python -m anime_studio.storyboard_cli export-selected --story-id pilot_scene
 5. `SelectedShotLibrary.asset` を選択し、`AI Anime Studio > Create Timeline From Selected Shot Library` を実行します。
 6. `Assets/AIAnimeStudio/Timelines/<story_id>/` に Timeline asset が作られ、Scene に `PlayableDirector` 付きObjectが配置されます。
 
-Timeline生成には Unity の Timeline package が必要です。
+Timeline生成には Unity の Timeline package が必要です。Cinemachine package がある場合はVirtual Cameraも作成します。
 
 ## 生成される情報
 
@@ -66,13 +66,22 @@ Timeline Builder は、Shotごとに `ActivationTrack` を作り、`duration_sec
 - `key_light` / `fill_light` / `rim_light` から Directional Light を作ります。
 - `mood` / `time_of_day` / `color_palette` から明るさと色味をざっくり決めます。
 
+## Cinemachine Virtual Camera
+
+Cinemachine が導入されている場合は、各Shotに `VirtualCamera_<shot>` を生成します。
+
+- Cinemachine 3 の `Unity.Cinemachine.CinemachineCamera` を優先して検出します。
+- Cinemachine 2 の `Cinemachine.CinemachineVirtualCamera` にも対応します。
+- Cinemachine が無い場合は通常の `Camera` のみを作り、コンパイルエラーを避けます。
+- Cinemachine Brain がSceneに無い場合は、最小の `Cinemachine_Brain_Camera` を追加します。
+
 ## 仮カメラ移動
 
-`cameraMovement` に動きが入っているShotでは、Camera用の `.anim` を自動生成し、Timelineへ `AnimationTrack` として配置します。
+`cameraMovement` に動きが入っているShotでは、CameraまたはVirtual Camera用の `.anim` を自動生成し、Timelineへ `AnimationTrack` として配置します。
 
 - `dolly in` / `push in` / `zoom in` はカメラを前へ寄せます。
 - `dolly out` / `pull back` / `zoom out` はカメラを後ろへ引きます。
 - `pan left/right`、`tilt up/down`、`truck left/right`、`crane up/down` を簡易的に反映します。
 - `static` / `locked` / `fixed` / `none` / `still` は移動なしとして扱います。
 
-まずは採用済みShotをUnity Timeline上に時間順で並べ、仮カメラ・仮ライト・仮カメラ移動込みで編集開始できる足場を作るところまでです。
+まずは採用済みShotをUnity Timeline上に時間順で並べ、仮カメラ・仮ライト・Cinemachine Virtual Camera・仮カメラ移動込みで編集開始できる足場を作るところまでです。
