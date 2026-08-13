@@ -34,14 +34,14 @@ Timeline生成には Unity の Timeline package が必要です。
 
 各Shotの子Objectには、`camera_work` 由来の仮 `Camera` と、`lighting_setup` 由来の仮 `Light` も自動生成します。カメラは framing / angle / lens_mm をもとに距離・角度・画角を推定し、ライトは key / fill / rim / mood / time_of_day / color_palette をもとに簡易的な Directional Light を作ります。
 
-この実装は「編集開始用の仮Timeline」を作るためのものです。正式なカメラ演出やUnity Timelineの最終編集は、この仮配置を土台に調整します。
+`cameraMovement` が `dolly in` / `pull back` / `pan left` / `tilt up` などを含む場合は、Camera用の `.anim` を `CameraAnimations` フォルダへ作り、Timelineに `AnimationTrack` として配置します。これは編集開始用の仮アニメーションなので、Unity側であとから自由に調整できます。
 
 ## 低VRAM開発での位置づけ
 
-ComfyUIで大量生成せず、まず採用済みの軽いShot単位manifestだけをUnityへ渡します。Unity側では画像参照・順序・仮カメラ・仮ライトを確認するだけなので、RTX 3050 6GB環境でも制作の足場として扱いやすい構成です。
+ComfyUIで大量生成せず、まず採用済みの軽いShot単位manifestだけをUnityへ渡します。Unity側では画像参照・順序・仮カメラ・仮ライト・仮カメラ移動を確認するだけなので、RTX 3050 6GB環境でも制作の足場として扱いやすい構成です。
 
 ## 次の拡張候補
 
-- camera movement から簡易AnimationTrackを作る
 - Timeline Clip にShotメモやpromptを表示する
-- 仮カメラ・仮ライトのプリセットをJSONで調整可能にする
+- 仮カメラ・仮ライト・仮移動のプリセットをJSONで調整可能にする
+- Cinemachine連携へ置き換える
