@@ -7,7 +7,7 @@ from pathlib import Path
 from .asset_inventory import collect_asset_inventory
 from .character_manager import register_character_asset
 from .character_profile import create_character_profile
-from .comfyui_workflow_export import export_comfyui_workflow
+from .comfyui_workflow_export import export_comfyui_workflow, list_comfyui_templates
 from .dataset_builder import build_lora_dataset
 from .frame_extraction import build_frame_extraction_plan, extract_frames
 from .kohya_config import KohyaLowVramSettings, generate_kohya_low_vram_config
@@ -213,12 +213,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Export ComfyUI workflow files from project metadata.",
     )
     comfyui_subparsers = comfyui.add_subparsers(dest="comfyui_command", required=True)
+    comfyui_subparsers.add_parser(
+        "list-templates",
+        help="List bundled ComfyUI workflow templates.",
+    )
     comfyui_export = comfyui_subparsers.add_parser(
         "export-workflow",
         help="Inject a registered LoRA into a ComfyUI workflow template.",
     )
     comfyui_export.add_argument("--character-id", required=True, help="Character id to export.")
-    comfyui_export.add_argument("--template", required=True, help="ComfyUI workflow template JSON.")
+    comfyui_export.add_argument(
+        "--template",
+        default=None,
+        help="ComfyUI workflow template JSON. Defaults to the bundled SD1.5 LoRA draft template.",
+    )
     comfyui_export.add_argument(
         "--output",
         default=None,
@@ -395,6 +403,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"LoRA entries: {result.lora_count}")
         return 0
 
+    if args.command == "comfyui" and args.comfyui_command == "list-templates":
+        templates = list_comfyui_templates(settings)
+        if not templates:
+            print("No ComfyUI templates found.")
+            return 0
+        for template in templates:
+            print(template)
+        return 0
+
     if args.command == "comfyui" and args.comfyui_command == "export-workflow":
         result = export_comfyui_workflow(
             settings=settings,
@@ -406,6 +423,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"Wrote ComfyUI workflow: {result.workflow_path}")
         print(f"Manifest: {result.manifest_path}")
+        print(f"Template: {result.template_path}")
         print(f"LoRA: {result.lora_name}")
         return 0
 
