@@ -25,6 +25,7 @@ AIを活用したアニメーション制作支援・学習・生成環境を構
 - LoRA設定・学習結果のCharacterProfile紐づけ
 - ComfyUI / Unity参照用LoRA manifest生成
 - ComfyUI workflow templateへのLoRA参照差し込み
+- Phase 6向けの音声・リップシンク・効果音・モーションcue台帳
 
 ## まず動かすもの
 
@@ -88,6 +89,9 @@ anime-lora-training/
 │  └─ phase3_lora_training.md
 ├─ scripts/
 │  └─ run_inventory.ps1
+├─ templates/
+│  └─ comfyui/
+│     └─ sd15_lora_txt2img_512.json
 ├─ src/
 │  └─ anime_studio/
 │     ├─ __init__.py
@@ -224,10 +228,17 @@ ComfyUI workflow templateへmanifest内のLoRA参照を差し込んだworkflow�
 python -m anime_studio.cli comfyui export-workflow --character-id sample_hero --template templates/comfyui/draft.json
 ```
 
+付属の軽量SD1.5テンプレートを使う場合は `--template` を省略できます。
+
+```powershell
+python -m anime_studio.cli comfyui list-templates
+python -m anime_studio.cli comfyui export-workflow --character-id sample_hero
+```
+
 出力先:
 
 ```text
-outputs/comfyui/sample_hero/draft_with_lora.json
+outputs/comfyui/sample_hero/sd15_lora_txt2img_512_with_lora.json
 ```
 
 template内の`LoraLoader`ノードには`lora_name`、`strength_model`、`strength_clip`を差し込みます。文字列内の`{{character_id}}`、`{{positive_prompt_tags}}`、`{{lora_name}}`、`{{lora_model_path}}`、`{{lora_weight}}`、`{{clip_weight}}`などのプレースホルダーも置換します。
@@ -314,6 +325,7 @@ template内の`LoraLoader`ノードには`lora_name`、`strength_model`、`stren
 - ショットのタイミング
 
 などを制作補助情報として提示します。
+
 
 ### Storyboard
 
@@ -427,10 +439,12 @@ template内の`LoraLoader`ノードには`lora_name`、`strength_model`、`stren
 
 ### Phase 6: 拡張
 
-1. AI音声
-2. リップシンク
-3. 効果音
-4. モーション関連機能
+1. AI音声（voice cue台帳）
+2. リップシンク（placeholder viseme timing plan）
+3. 効果音（SFX cue台帳）
+4. モーション関連機能（motion cue台帳）
+
+現在はPhase 6の最小実装として、重いAI推論を呼ばずに、Shot単位で音声、口パク、効果音、モーションをJSON管理し、Unity/編集用の `phase6_manifest.json` へ統合する入口を追加しています。
 
 ## 重要な制約
 
