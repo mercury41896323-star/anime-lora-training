@@ -33,6 +33,10 @@ class Phase7UnitySampleTest(unittest.TestCase):
         self.assertIn("AnimationTrack", builder)
         self.assertIn("ActivationTrack", builder)
         self.assertIn("BuildAnimationClip", builder)
+        self.assertIn("CreateProtectedRevisionFolder", builder)
+        self.assertIn("timeline_build_report.json", builder)
+        self.assertIn("preserveExistingTimelineEdits", runtime)
+        self.assertIn("lastGeneratedTimelineAssetPath", runtime)
 
 
 if __name__ == "__main__":
