@@ -18,6 +18,8 @@ from .comfyui_queue import (
 from .comfyui_results import import_comfyui_results
 from .comfyui_workflow_export import export_comfyui_workflow, list_comfyui_templates
 from .dataset_builder import build_lora_dataset
+from .edit_export import export_edit_timeline
+from .edit_preview import build_preview_movie
 from .frame_extraction import build_frame_extraction_plan, extract_frames
 from .kohya_config import KohyaLowVramSettings, generate_kohya_low_vram_config
 from .lora_manifest import generate_lora_manifest
@@ -25,7 +27,17 @@ from .lora_registry import list_lora_artifacts, register_lora_result
 from .settings import load_settings
 from .storyboard import add_shot, create_storyboard, list_storyboard_shots
 from .storyboard_comfyui import export_storyboard_comfyui_workflows
+from .storyboard_editor import write_storyboard_editor
+from .storyboard_editor_manifest import export_selected_shot_manifest
+from .storyboard_results import (
+    link_comfyui_results_to_storyboard,
+    link_shot_result,
+    list_shot_results,
+)
+from .storyboard_review import set_shot_result_decision, write_storyboard_preview
 from .tagger import finalize_tag_sidecars, generate_auto_tag_records, update_manual_tags
+from .timeline_revision import adopt_timeline_revision, review_timeline_revisions
+from .training_readiness import check_training_readiness, run_training_smoke
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -125,6 +137,7 @@ def build_parser() -> argparse.ArgumentParser:
     storyboard_add_shot.add_argument("--title", required=True, help="Shot title.")
     storyboard_add_shot.add_argument("--character-id", default="", help="Optional character id.")
     storyboard_add_shot.add_argument("--prompt", default="", help="Draft generation prompt.")
+    storyboard_add_shot.add_argument("--negative-prompt", default="", help="Shot-specific negative prompt.")
     storyboard_add_shot.add_argument(
         "--duration",
         type=float,
@@ -133,6 +146,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     storyboard_add_shot.add_argument("--camera", default="", help="Camera note.")
     storyboard_add_shot.add_argument("--lighting", default="", help="Lighting note.")
+    storyboard_add_shot.add_argument("--seed", type=int, default=None, help="Optional fixed generation seed.")
+    storyboard_add_shot.add_argument("--width", type=int, default=None, help="Optional generated image width.")
+    storyboard_add_shot.add_argument("--height", type=int, default=None, help="Optional generated image height.")
+    storyboard_add_shot.add_argument("--steps", type=int, default=None, help="Optional sampler steps.")
     storyboard_add_shot.add_argument("--notes", default="", help="Shot notes.")
     storyboard_list = storyboard_subparsers.add_parser(
         "list",
@@ -180,6 +197,77 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Queue JSON path. Defaults to queues/comfyui/jobs.json.",
     )
+    storyboard_link_result = storyboard_subparsers.add_parser(
+        "link-result",
+        help="Link a generated asset to a storyboard shot.",
+    )
+    storyboard_link_result.add_argument("--story-id", required=True, help="Storyboard id.")
+    storyboard_link_result.add_argument("--shot-id", required=True, help="Shot id.")
+    storyboard_link_result.add_argument("--result", required=True, help="Generated result path.")
+    storyboard_link_result.add_argument("--kind", default="image", help="Result kind.")
+    storyboard_link_result.add_argument("--source", default="manual", help="Result source.")
+    storyboard_link_result.add_argument(
+        "--source-reference",
+        default="",
+        help="Original source reference, such as a ComfyUI output reference.",
+    )
+    storyboard_link_comfyui = storyboard_subparsers.add_parser(
+        "link-comfyui-results",
+        help="Link imported ComfyUI results to the storyboard shot stored in workflow metadata.",
+    )
+    storyboard_link_comfyui.add_argument("--job-id", required=True, help="ComfyUI queue job id.")
+    storyboard_link_comfyui.add_argument(
+        "--queue",
+        default=None,
+        help="Queue JSON path. Defaults to queues/comfyui/jobs.json.",
+    )
+    storyboard_link_comfyui.add_argument(
+        "--results-manifest",
+        default=None,
+        help="Imported ComfyUI results manifest. Defaults to the CharacterProfile generated folder.",
+    )
+    storyboard_results = storyboard_subparsers.add_parser(
+        "results",
+        help="List generated results linked to storyboard shots.",
+    )
+    storyboard_results.add_argument("--story-id", required=True, help="Storyboard id.")
+    storyboard_results.add_argument("--shot-id", default=None, help="Optional shot id filter.")
+    storyboard_results.add_argument(
+        "--json",
+        action="store_true",
+        help="Print full JSON records.",
+    )
+    storyboard_decide = storyboard_subparsers.add_parser(
+        "decide-result",
+        help="Mark a linked shot result as candidate, selected, or rejected.",
+    )
+    storyboard_decide.add_argument("--story-id", required=True, help="Storyboard id.")
+    storyboard_decide.add_argument("--result-id", required=True, help="Shot result id.")
+    storyboard_decide.add_argument(
+        "--decision",
+        required=True,
+        choices=["candidate", "selected", "rejected"],
+        help="Decision state for the result.",
+    )
+    storyboard_decide.add_argument("--notes", default="", help="Decision notes.")
+    storyboard_preview = storyboard_subparsers.add_parser(
+        "preview",
+        help="Write a lightweight HTML preview for storyboard results.",
+    )
+    storyboard_preview.add_argument("--story-id", required=True, help="Storyboard id.")
+    storyboard_preview.add_argument("--output", default=None, help="Preview HTML output path.")
+    storyboard_export_selected = storyboard_subparsers.add_parser(
+        "export-selected",
+        help="Export selected shot results for Unity and editing tools.",
+    )
+    storyboard_export_selected.add_argument("--story-id", required=True, help="Storyboard id.")
+    storyboard_export_selected.add_argument("--output", default=None, help="Selected shot manifest output path.")
+    storyboard_editor = storyboard_subparsers.add_parser(
+        "editor",
+        help="Write a lightweight HTML ShotEditor for a storyboard.",
+    )
+    storyboard_editor.add_argument("--story-id", required=True, help="Storyboard id.")
+    storyboard_editor.add_argument("--output", default=None, help="Editor HTML output path.")
 
     frames = subparsers.add_parser(
         "frames",
@@ -448,6 +536,69 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Record ComfyUI output references without copying files.",
     )
+
+    edit = subparsers.add_parser(
+        "edit",
+        help="Finalize Phase 7 edit outputs and Unity Timeline handoffs.",
+    )
+    edit_subparsers = edit.add_subparsers(dest="edit_command", required=True)
+    edit_export = edit_subparsers.add_parser(
+        "export",
+        help="Export edit_timeline_manifest.json to FFmpeg concat, EDL, and FCPXML.",
+    )
+    edit_export.add_argument("--story-id", required=True, help="Storyboard id.")
+    edit_export.add_argument("--manifest", default=None, help="Optional edit_timeline_manifest.json path.")
+    edit_export.add_argument("--output-dir", default=None, help="Optional export output directory.")
+    edit_export.add_argument("--formats", default="ffmpeg,edl,fcpxml", help="Comma-separated formats.")
+    edit_preview = edit_subparsers.add_parser(
+        "preview-movie",
+        help="Write or run an FFmpeg preview movie command.",
+    )
+    edit_preview.add_argument("--story-id", required=True, help="Storyboard id.")
+    edit_preview.add_argument("--manifest", default=None, help="Optional edit_timeline_manifest.json path.")
+    edit_preview.add_argument("--output", default=None, help="Preview movie output path.")
+    edit_preview.add_argument("--ffmpeg", default="ffmpeg", help="FFmpeg executable path.")
+    edit_preview.add_argument("--run", action="store_true", help="Run FFmpeg instead of only writing the plan.")
+    edit_preview.add_argument("--no-overwrite", action="store_true", help="Do not overwrite existing preview movie.")
+    edit_review = edit_subparsers.add_parser(
+        "revision-review",
+        help="Review Unity Timeline revision folders.",
+    )
+    edit_review.add_argument("--story-id", required=True, help="Storyboard id.")
+    edit_review.add_argument("--timeline-root", default=None, help="Optional Unity Timeline root folder.")
+    edit_review.add_argument("--edit-manifest", default=None, help="Optional edit_timeline_manifest.json path.")
+    edit_review.add_argument("--output", default=None, help="Optional review manifest path.")
+    edit_adopt = edit_subparsers.add_parser(
+        "revision-adopt",
+        help="Adopt a reviewed Unity Timeline revision.",
+    )
+    edit_adopt.add_argument("--story-id", required=True, help="Storyboard id.")
+    edit_adopt.add_argument("--revision-id", default=None, help="Revision id. Defaults to recommended revision.")
+    edit_adopt.add_argument("--review", default=None, help="Optional review manifest path.")
+    edit_adopt.add_argument("--output", default=None, help="Optional selected revision manifest path.")
+
+    training = subparsers.add_parser(
+        "training",
+        help="Check and prepare local LoRA training readiness.",
+    )
+    training_subparsers = training.add_subparsers(dest="training_command", required=True)
+    training_ready = training_subparsers.add_parser(
+        "readiness",
+        help="Check whether a character is ready for local LoRA training.",
+    )
+    training_ready.add_argument("--character-id", required=True, help="Character id.")
+    training_ready.add_argument("--min-images", type=int, default=20, help="Minimum recommended image count.")
+    training_ready.add_argument("--output", default=None, help="Optional readiness manifest path.")
+    training_smoke = training_subparsers.add_parser(
+        "smoke",
+        help="Run dataset -> Kohya config -> readiness without launching training.",
+    )
+    training_smoke.add_argument("--character-id", required=True, help="Character id.")
+    training_smoke.add_argument("--pretrained-model", required=True, help="SD base model path or id for generated config.")
+    training_smoke.add_argument("--kohya-root", default=".", help="Kohya/sd-scripts root path.")
+    training_smoke.add_argument("--min-images", type=int, default=1, help="Minimum image count for smoke readiness.")
+    training_smoke.add_argument("--provider", default="baseline", help="Tag provider for smoke auto tags.")
+    training_smoke.add_argument("--output", default=None, help="Optional smoke manifest path.")
     return parser
 
 
@@ -553,9 +704,14 @@ def main(argv: list[str] | None = None) -> int:
             title=args.title,
             character_id=args.character_id,
             prompt=args.prompt,
+            negative_prompt=args.negative_prompt,
             duration_seconds=args.duration,
             camera=args.camera,
             lighting=args.lighting,
+            seed=args.seed,
+            width=args.width,
+            height=args.height,
+            steps=args.steps,
             notes=args.notes,
         )
         print(f"Updated storyboard: {storyboard_path}")
@@ -587,6 +743,94 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Wrote storyboard ComfyUI manifest: {result.manifest_path}")
         print(f"Workflows: {len(result.workflows)}")
         print(f"Skipped shots: {len(result.skipped_shots)}")
+        return 0
+
+    if args.command == "storyboard" and args.storyboard_command == "link-result":
+        result = link_shot_result(
+            settings=settings,
+            story_id=args.story_id,
+            shot_id=args.shot_id,
+            result_path=args.result,
+            kind=args.kind,
+            source=args.source,
+            source_reference=args.source_reference,
+        )
+        print(f"Linked shot result: {result.linked[0].result_id}")
+        print(f"Shot results manifest: {result.manifest_path}")
+        return 0
+
+    if args.command == "storyboard" and args.storyboard_command == "link-comfyui-results":
+        result = link_comfyui_results_to_storyboard(
+            settings=settings,
+            job_id=args.job_id,
+            queue_path=args.queue,
+            results_manifest_path=args.results_manifest,
+        )
+        print(f"Linked ComfyUI shot results: {len(result.linked)}")
+        print(f"Skipped duplicates: {result.skipped_count}")
+        print(f"Shot results manifest: {result.manifest_path}")
+        return 0
+
+    if args.command == "storyboard" and args.storyboard_command == "results":
+        results = list_shot_results(
+            settings=settings,
+            story_id=args.story_id,
+            shot_id=args.shot_id,
+        )
+        if args.json:
+            print(json.dumps([result.__dict__ for result in results], ensure_ascii=False, indent=2))
+            return 0
+        if not results:
+            print("No storyboard shot results.")
+            return 0
+        for result in results:
+            print(f"{result.order}. {result.shot_id}: {result.kind} / {result.source} / {result.stored_path}")
+        return 0
+
+    if args.command == "storyboard" and args.storyboard_command == "decide-result":
+        result = set_shot_result_decision(
+            settings=settings,
+            story_id=args.story_id,
+            result_id=args.result_id,
+            decision=args.decision,
+            notes=args.notes,
+        )
+        print(f"Updated shot result decision: {result.result_id}")
+        print(f"Decision: {result.decision}")
+        return 0
+
+    if args.command == "storyboard" and args.storyboard_command == "preview":
+        result = write_storyboard_preview(
+            settings=settings,
+            story_id=args.story_id,
+            output_path=args.output,
+        )
+        print(f"Wrote storyboard preview: {result.preview_path}")
+        print(f"Results: {result.result_count}")
+        print(f"Selected: {result.selected_count}")
+        return 0
+
+    if args.command == "storyboard" and args.storyboard_command == "export-selected":
+        result = export_selected_shot_manifest(
+            settings=settings,
+            story_id=args.story_id,
+            output_path=args.output,
+        )
+        print(f"Wrote selected shot manifest: {result.manifest_path}")
+        print(f"Selected shots: {result.selected_shot_count}")
+        print(f"Missing shots: {result.missing_shot_count}")
+        return 0
+
+    if args.command == "storyboard" and args.storyboard_command == "editor":
+        result = write_storyboard_editor(
+            settings=settings,
+            story_id=args.story_id,
+            output_path=args.output,
+        )
+        print(f"Wrote storyboard editor: {result.editor_path}")
+        print(f"Shots: {result.shot_count}")
+        print(f"Selected: {result.selected_count}")
+        print(f"Missing: {result.missing_count}")
         return 0
 
     if args.command == "frames":
@@ -790,6 +1034,92 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Results manifest: {result.results_manifest_path}")
         print(f"Assets manifest: {result.assets_manifest_path}")
         return 0
+
+    if args.command == "edit" and args.edit_command == "export":
+        result = export_edit_timeline(
+            settings=settings,
+            story_id=args.story_id,
+            manifest_path=args.manifest,
+            output_dir=args.output_dir,
+            formats=tuple(args.formats.split(",")),
+        )
+        print(f"Wrote edit exports: {result.export_dir}")
+        print(f"Clips: {result.clip_count}")
+        for name, path in result.files.items():
+            print(f"{name}: {path}")
+        return 0
+
+    if args.command == "edit" and args.edit_command == "preview-movie":
+        result = build_preview_movie(
+            settings=settings,
+            story_id=args.story_id,
+            manifest_path=args.manifest,
+            output_path=args.output,
+            ffmpeg_path=args.ffmpeg,
+            run=args.run,
+            overwrite=not args.no_overwrite,
+        )
+        print(f"Wrote preview movie plan: {result.manifest_path}")
+        print(f"Output movie: {result.output_movie}")
+        print("Command: " + " ".join(result.command))
+        if result.ran:
+            print(f"FFmpeg return code: {result.return_code}")
+        return result.return_code or 0
+
+    if args.command == "edit" and args.edit_command == "revision-review":
+        result = review_timeline_revisions(
+            settings=settings,
+            story_id=args.story_id,
+            timeline_root=args.timeline_root,
+            edit_manifest_path=args.edit_manifest,
+            output_path=args.output,
+        )
+        print(f"Wrote timeline revision review: {result.manifest_path}")
+        print(f"Revisions: {result.revision_count}")
+        print(f"Recommended: {result.recommended_revision_id or 'none'}")
+        return 0
+
+    if args.command == "edit" and args.edit_command == "revision-adopt":
+        result = adopt_timeline_revision(
+            settings=settings,
+            story_id=args.story_id,
+            revision_id=args.revision_id,
+            review_path=args.review,
+            output_path=args.output,
+        )
+        print(f"Adopted timeline revision: {result.revision_id}")
+        print(f"Timeline asset: {result.timeline_asset}")
+        print(f"Manifest: {result.manifest_path}")
+        return 0
+
+    if args.command == "training" and args.training_command == "readiness":
+        result = check_training_readiness(
+            settings=settings,
+            character_id=args.character_id,
+            min_images=args.min_images,
+            output_path=args.output,
+        )
+        print(f"Wrote training readiness: {result.manifest_path}")
+        print(f"Ready: {result.ready}")
+        print(f"Images: {result.image_count}")
+        print(f"Issues: {result.issue_count}")
+        return 0 if result.ready else 1
+
+    if args.command == "training" and args.training_command == "smoke":
+        result = run_training_smoke(
+            settings=settings,
+            character_id=args.character_id,
+            pretrained_model=args.pretrained_model,
+            kohya_root=args.kohya_root,
+            min_images=args.min_images,
+            provider=args.provider,
+            output_path=args.output,
+        )
+        print(f"Wrote training smoke manifest: {result.manifest_path}")
+        print(f"Dataset: {result.dataset_dir}")
+        print(f"Kohya config: {result.kohya_config_dir}")
+        print(f"Ready: {result.ready}")
+        return 0 if result.ready else 1
 
     parser.error(f"Unknown command: {args.command}")
     return 2
