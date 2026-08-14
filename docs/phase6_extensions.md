@@ -80,6 +80,21 @@ python -m anime_studio.phase6_pipeline motion --story-id pilot_scene --shot-id s
 storyboards/pilot_scene/motion_cues.json
 ```
 
+## motion cueからAnimationClip設計図を作る
+
+`motion_cues.json` からUnity AnimationClip向けの軽量なkeyframe planを生成します。
+実際のUnity assetを直接作る前に、Shot単位の動き、対象track、仮keyframeを確認できます。
+
+```powershell
+python -m anime_studio.motion_clip_plan --story-id pilot_scene
+```
+
+出力:
+
+```text
+manifests/storyboards/pilot_scene/motion_clip_plan.json
+```
+
 ## 口パク計画を作る
 
 音声cueの `text` と `duration_seconds` から、仮のvisemeタイミングを生成します。
@@ -135,4 +150,4 @@ manifests/storyboards/pilot_scene/phase6_manifest.json
 
 ## 次の拡張候補
 
-- motion cueをより詳細なUnity AnimationClipへ変換する。
+- motion clip planをUnity Timeline Builder側のAnimationClip生成へ接続する。
