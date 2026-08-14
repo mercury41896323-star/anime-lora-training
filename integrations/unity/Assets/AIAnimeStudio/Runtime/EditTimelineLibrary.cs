@@ -13,6 +13,10 @@ namespace AIAnimeStudio
         public string importedAt = "";
         public int frameRate = 24;
         public float durationSeconds;
+        public bool preserveExistingTimelineEdits = true;
+        public int timelineRevision;
+        public string lastGeneratedTimelineAssetPath = "";
+        public string lastGeneratedRevisionFolder = "";
         public List<EditTimelineTrack> tracks = new List<EditTimelineTrack>();
     }
 
