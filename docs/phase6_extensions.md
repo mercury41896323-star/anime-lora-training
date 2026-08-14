@@ -48,6 +48,26 @@ python -m anime_studio.phase6_pipeline sfx --story-id pilot_scene --shot-id shot
 python -m anime_studio.phase6_pipeline sfx --story-id pilot_scene --shot-id shot_001 --label "soft wind" --asset-query "wind ambience" --asset-limit 5
 ```
 
+## 効果音候補をレビュー・採用する
+
+自動保存された `asset_library_candidates` は、すぐに確定せずレビュー用manifestへまとめられます。
+
+```powershell
+python -m anime_studio.sfx_review review --story-id pilot_scene
+```
+
+出力:
+
+```text
+manifests/storyboards/pilot_scene/sfx_asset_review.json
+```
+
+候補を採用する場合:
+
+```powershell
+python -m anime_studio.sfx_review select --story-id pilot_scene --cue-id sfx_shot_001_soft_wind --candidate-index 0
+```
+
 ## モーションcueを追加する
 
 ```powershell
