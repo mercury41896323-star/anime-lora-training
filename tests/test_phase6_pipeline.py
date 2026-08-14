@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+import wave
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,6 +89,43 @@ class Phase6PipelineTest(unittest.TestCase):
             self.assertEqual(phase6_manifest["shots"][0]["sfx_cues"][0]["label"], "soft wind")
             self.assertEqual(phase6_manifest["shots"][0]["motion_cues"][0]["target"], "sample_hero")
 
+    def test_builds_lip_sync_plan_from_wav_rms_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            settings = write_settings(root)
+            create_character_profile(settings, "sample_hero", "Sample Hero")
+            create_storyboard(settings, "pilot_scene", "Pilot Scene")
+            add_shot(
+                settings=settings,
+                story_id="pilot_scene",
+                shot_id="shot_001",
+                title="Opening",
+                character_id="sample_hero",
+                duration_seconds=3.0,
+            )
+            wav_path = root / "assets" / "audio" / "voice" / "shot_001.wav"
+            write_test_wav(wav_path)
+            add_voice_cue(
+                settings=settings,
+                story_id="pilot_scene",
+                shot_id="shot_001",
+                text="aiueo",
+                speaker="Sample Hero",
+                voice_asset_path="assets/audio/voice/shot_001.wav",
+                duration_seconds=3.0,
+            )
+
+            result = build_lip_sync_plan(settings, "pilot_scene", provider="wav-rms")
+
+            lip_manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+            cue = lip_manifest["items"][0]
+            self.assertEqual(cue["method"], "wav_rms_viseme_timing")
+            self.assertEqual(cue["provider"], "wav-rms")
+            self.assertEqual(cue["analysis"]["sample_rate"], 8000)
+            self.assertGreater(cue["analysis"]["window_count"], 1)
+            self.assertAlmostEqual(cue["duration_seconds"], 1.0)
+            self.assertIn("energy", cue["visemes"][0])
+
     def test_rejects_cues_for_unknown_shot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -135,6 +173,22 @@ def write_settings(root: Path):
         encoding="utf-8",
     )
     return load_settings(config_path)
+
+
+def write_test_wav(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sample_rate = 8000
+    samples = []
+    for index in range(sample_rate):
+        if index < sample_rate // 2:
+            samples.append(0)
+        else:
+            samples.append(8000 if index % 2 == 0 else -8000)
+    with wave.open(str(path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(b"".join(sample.to_bytes(2, "little", signed=True) for sample in samples))
 
 
 if __name__ == "__main__":
