@@ -4,6 +4,8 @@ import argparse
 from dataclasses import dataclass
 import json
 import re
+import struct
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +20,7 @@ DEFAULT_LANGUAGE = "ja"
 DEFAULT_VOICE_CHARS_PER_SECOND = 8.0
 DEFAULT_SFX_DURATION_SECONDS = 1.0
 DEFAULT_MOTION_DURATION_SECONDS = 1.0
+SUPPORTED_LIP_SYNC_PROVIDERS = {"text", "wav-rms"}
 
 
 @dataclass(frozen=True)
@@ -156,10 +159,12 @@ def build_lip_sync_plan(
     settings: AppSettings,
     story_id: str,
     output_path: str | Path | None = None,
+    provider: str = "text",
 ) -> LipSyncPlanResult:
     load_storyboard(settings, story_id)
+    validate_lip_sync_provider(provider)
     voice_cues = read_cue_items(get_voice_cues_path(settings, story_id), "storyboard_voice_cues")
-    lip_sync_cues = [render_lip_sync_cue(cue) for cue in voice_cues]
+    lip_sync_cues = [render_lip_sync_cue(cue, settings=settings, provider=provider) for cue in voice_cues]
     path = normalize_lip_sync_plan_path(settings, story_id, output_path)
     write_cue_manifest(path, "storyboard_lip_sync_plan", story_id, lip_sync_cues)
     return LipSyncPlanResult(manifest_path=path, cue_count=len(lip_sync_cues))
@@ -235,22 +240,151 @@ def export_phase6_manifest(
     )
 
 
-def render_lip_sync_cue(voice_cue: dict[str, Any]) -> dict[str, Any]:
+def render_lip_sync_cue(
+    voice_cue: dict[str, Any],
+    settings: AppSettings | None = None,
+    provider: str = "text",
+) -> dict[str, Any]:
+    validate_lip_sync_provider(provider)
     duration = float(voice_cue.get("duration_seconds", 1.0))
     text = str(voice_cue.get("text", ""))
+    source_voice_asset_path = str(voice_cue.get("voice_asset_path", ""))
+    if provider == "wav-rms" and settings is not None and source_voice_asset_path:
+        audio_result = build_wav_rms_visemes(
+            settings=settings,
+            voice_asset_path=source_voice_asset_path,
+            text=text,
+            fallback_duration_seconds=duration,
+        )
+        return {
+            "cue_id": build_cue_id("lip", str(voice_cue.get("shot_id", "")), str(voice_cue.get("cue_id", ""))),
+            "shot_id": str(voice_cue.get("shot_id", "")),
+            "order": int(voice_cue.get("order", 0)),
+            "voice_cue_id": str(voice_cue.get("cue_id", "")),
+            "method": audio_result["method"],
+            "provider": provider,
+            "source_voice_asset_path": source_voice_asset_path,
+            "text": text,
+            "start_seconds": float(voice_cue.get("start_seconds", 0.0)),
+            "duration_seconds": audio_result["duration_seconds"],
+            "visemes": audio_result["visemes"],
+            "analysis": audio_result["analysis"],
+            "updated_at": utc_timestamp(),
+        }
     return {
         "cue_id": build_cue_id("lip", str(voice_cue.get("shot_id", "")), str(voice_cue.get("cue_id", ""))),
         "shot_id": str(voice_cue.get("shot_id", "")),
         "order": int(voice_cue.get("order", 0)),
         "voice_cue_id": str(voice_cue.get("cue_id", "")),
         "method": "placeholder_viseme_timing",
-        "source_voice_asset_path": str(voice_cue.get("voice_asset_path", "")),
+        "provider": provider,
+        "source_voice_asset_path": source_voice_asset_path,
         "text": text,
         "start_seconds": float(voice_cue.get("start_seconds", 0.0)),
         "duration_seconds": duration,
         "visemes": build_placeholder_visemes(text, duration),
         "updated_at": utc_timestamp(),
     }
+
+
+def build_wav_rms_visemes(
+    settings: AppSettings,
+    voice_asset_path: str | Path,
+    text: str,
+    fallback_duration_seconds: float,
+) -> dict[str, Any]:
+    path = normalize_project_path(settings, voice_asset_path)
+    if not path.exists() or path.suffix.lower() != ".wav":
+        return build_audio_fallback_result(text, fallback_duration_seconds, "missing_or_unsupported_wav")
+
+    try:
+        with wave.open(str(path), "rb") as wav_file:
+            sample_rate = wav_file.getframerate()
+            channel_count = wav_file.getnchannels()
+            sample_width = wav_file.getsampwidth()
+            frame_count = wav_file.getnframes()
+            duration_seconds = round(frame_count / sample_rate, 3) if sample_rate else fallback_duration_seconds
+            window_count = max(4, min(48, int(max(duration_seconds, 0.1) * 12)))
+            frames_per_window = max(1, frame_count // window_count)
+            energies: list[float] = []
+            for _ in range(window_count):
+                frame_bytes = wav_file.readframes(frames_per_window)
+                if not frame_bytes:
+                    break
+                energies.append(calculate_pcm_rms(frame_bytes, sample_width, channel_count))
+    except (wave.Error, EOFError, OSError, ValueError):
+        return build_audio_fallback_result(text, fallback_duration_seconds, "wav_read_failed")
+
+    if not energies:
+        return build_audio_fallback_result(text, fallback_duration_seconds, "empty_wav")
+
+    max_energy = max(energies) or 1.0
+    letters = [character for character in text if not character.isspace()]
+    visemes: list[dict[str, float | str]] = []
+    for index, energy in enumerate(energies):
+        normalized_energy = energy / max_energy
+        time_seconds = round((duration_seconds * index) / max(len(energies), 1), 3)
+        if normalized_energy < 0.08:
+            mouth = "closed"
+        elif letters:
+            mouth = estimate_mouth_shape(letters[min(index, len(letters) - 1)])
+        else:
+            mouth = "neutral"
+        visemes.append(
+            {
+                "time_seconds": time_seconds,
+                "mouth": mouth,
+                "energy": round(normalized_energy, 3),
+            }
+        )
+    visemes.append({"time_seconds": round(duration_seconds, 3), "mouth": "closed", "energy": 0.0})
+    return {
+        "method": "wav_rms_viseme_timing",
+        "duration_seconds": duration_seconds,
+        "visemes": visemes,
+        "analysis": {
+            "provider": "wav-rms",
+            "sample_rate": sample_rate,
+            "channel_count": channel_count,
+            "sample_width": sample_width,
+            "frame_count": frame_count,
+            "window_count": len(energies),
+        },
+    }
+
+
+def build_audio_fallback_result(
+    text: str,
+    fallback_duration_seconds: float,
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "method": "placeholder_viseme_timing",
+        "duration_seconds": fallback_duration_seconds,
+        "visemes": build_placeholder_visemes(text, fallback_duration_seconds),
+        "analysis": {
+            "provider": "text",
+            "fallback_reason": reason,
+        },
+    }
+
+
+def calculate_pcm_rms(frame_bytes: bytes, sample_width: int, channel_count: int) -> float:
+    if sample_width == 1:
+        samples = [sample - 128 for sample in frame_bytes]
+    elif sample_width == 2:
+        sample_count = len(frame_bytes) // 2
+        samples = list(struct.unpack("<" + "h" * sample_count, frame_bytes[: sample_count * 2]))
+    elif sample_width == 4:
+        sample_count = len(frame_bytes) // 4
+        samples = list(struct.unpack("<" + "i" * sample_count, frame_bytes[: sample_count * 4]))
+    else:
+        raise ValueError("Unsupported WAV sample width.")
+    if not samples:
+        return 0.0
+    mono_samples = samples[:: max(channel_count, 1)]
+    squared_sum = sum(sample * sample for sample in mono_samples)
+    return (squared_sum / len(mono_samples)) ** 0.5
 
 
 def build_placeholder_visemes(text: str, duration_seconds: float) -> list[dict[str, float | str]]:
@@ -360,6 +494,13 @@ def normalize_optional_asset_path(settings: AppSettings, path: str | Path) -> st
     return project_relative_path(settings, path)
 
 
+def normalize_project_path(settings: AppSettings, path: str | Path) -> Path:
+    resolved = Path(path)
+    if not resolved.is_absolute():
+        resolved = settings.project_root / resolved
+    return resolved
+
+
 def validate_non_empty(value: str, name: str) -> None:
     if not value.strip():
         raise ValueError(f"{name} must not be empty.")
@@ -373,6 +514,11 @@ def validate_positive(value: float, name: str) -> None:
 def validate_non_negative(value: float, name: str) -> None:
     if value < 0:
         raise ValueError(f"{name} must be 0 or greater.")
+
+
+def validate_lip_sync_provider(provider: str) -> None:
+    if provider not in SUPPORTED_LIP_SYNC_PROVIDERS:
+        raise ValueError(f"Unsupported lip-sync provider: {provider}")
 
 
 def get_voice_cues_path(settings: AppSettings, story_id: str) -> Path:
@@ -449,9 +595,15 @@ def build_parser() -> argparse.ArgumentParser:
     motion.add_argument("--intensity", type=float, default=1.0, help="Relative intensity.")
     motion.add_argument("--notes", default="", help="Production notes.")
 
-    lip_sync = subparsers.add_parser("lip-sync", help="Build a placeholder lip-sync timing plan from voice cues.")
+    lip_sync = subparsers.add_parser("lip-sync", help="Build a lip-sync timing plan from voice cues.")
     lip_sync.add_argument("--story-id", required=True, help="Storyboard id.")
     lip_sync.add_argument("--output", default=None, help="Lip-sync plan output path.")
+    lip_sync.add_argument(
+        "--provider",
+        choices=sorted(SUPPORTED_LIP_SYNC_PROVIDERS),
+        default="text",
+        help="Lip-sync provider. Use wav-rms for lightweight WAV amplitude analysis.",
+    )
 
     export = subparsers.add_parser("export", help="Export a combined Phase 6 manifest for Unity/editing tools.")
     export.add_argument("--story-id", required=True, help="Storyboard id.")
@@ -518,9 +670,15 @@ def main(argv: list[str] | None = None) -> int:
         print_cue_result("motion cue", result)
         return 0
     if args.command == "lip-sync":
-        result = build_lip_sync_plan(settings=settings, story_id=args.story_id, output_path=args.output)
+        result = build_lip_sync_plan(
+            settings=settings,
+            story_id=args.story_id,
+            output_path=args.output,
+            provider=args.provider,
+        )
         print(f"Wrote lip-sync plan: {result.manifest_path}")
         print(f"Cues: {result.cue_count}")
+        print(f"Provider: {args.provider}")
         return 0
     if args.command == "export":
         result = export_phase6_manifest(settings=settings, story_id=args.story_id, output_path=args.output)
