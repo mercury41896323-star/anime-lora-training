@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from anime_studio.character_profile import create_character_profile
+from anime_studio.character_manager import RegisteredAsset, append_asset_manifest
 from anime_studio.phase6_pipeline import (
     add_motion_cue,
     add_sfx_cue,
@@ -76,6 +77,7 @@ class Phase6PipelineTest(unittest.TestCase):
             self.assertEqual(voice_manifest["manifest_type"], "storyboard_voice_cues")
             self.assertEqual(voice_manifest["items"][0]["voice_asset_path"], "assets/audio/voice/shot_001.wav")
             self.assertEqual(sfx_manifest["items"][0]["tags"], ["ambience", "wind"])
+            self.assertEqual(sfx_manifest["items"][0]["tag_source"], "manual")
             self.assertEqual(motion_manifest["items"][0]["motion"], "small nod")
             self.assertEqual(lip_manifest["manifest_type"], "storyboard_lip_sync_plan")
             self.assertGreater(len(lip_manifest["items"][0]["visemes"]), 1)
@@ -125,6 +127,50 @@ class Phase6PipelineTest(unittest.TestCase):
             self.assertGreater(cue["analysis"]["window_count"], 1)
             self.assertAlmostEqual(cue["duration_seconds"], 1.0)
             self.assertIn("energy", cue["visemes"][0])
+
+    def test_sfx_cue_auto_tags_and_asset_library_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            settings = write_settings(root)
+            create_character_profile(settings, "sample_hero", "Sample Hero")
+            create_storyboard(settings, "pilot_scene", "Pilot Scene")
+            add_shot(
+                settings=settings,
+                story_id="pilot_scene",
+                shot_id="shot_001",
+                title="Opening",
+                character_id="sample_hero",
+                duration_seconds=3.0,
+            )
+            stored = root / "assets" / "processed" / "characters" / "sample_hero" / "soft_wind.wav"
+            stored.parent.mkdir(parents=True, exist_ok=True)
+            stored.write_bytes(b"wav")
+            append_asset_manifest(
+                settings,
+                "sample_hero",
+                RegisteredAsset(
+                    original_path="library/soft_wind.wav",
+                    stored_path="assets/processed/characters/sample_hero/soft_wind.wav",
+                    kind="sfx",
+                    size_bytes=3,
+                    source="asset_library",
+                    metadata={"tags": ["wind", "ambience"]},
+                ),
+            )
+
+            sfx = add_sfx_cue(
+                settings=settings,
+                story_id="pilot_scene",
+                shot_id="shot_001",
+                label="soft wind",
+            )
+
+            sfx_manifest = json.loads(sfx.manifest_path.read_text(encoding="utf-8"))
+            cue = sfx_manifest["items"][0]
+            self.assertEqual(cue["tag_source"], "auto")
+            self.assertIn("wind", cue["tags"])
+            self.assertIn("ambience", cue["auto_tags"])
+            self.assertEqual(cue["asset_library_candidates"][0]["stored_path"], "assets/processed/characters/sample_hero/soft_wind.wav")
 
     def test_rejects_cues_for_unknown_shot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
