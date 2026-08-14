@@ -35,6 +35,19 @@ python -m anime_studio.phase6_pipeline sfx --story-id pilot_scene --shot-id shot
 storyboards/pilot_scene/sfx_cues.json
 ```
 
+`--tags` を省略した場合は、`label` と `asset` のファイル名から `wind`、`ambience`、`footstep`、`impact` などの軽量タグを自動推定します。
+また、Asset Libraryに `kind: sfx` / `audio` / `other` の素材が登録されている場合、SFX cueへ `asset_library_candidates` として候補を保存します。
+
+```powershell
+python -m anime_studio.phase6_pipeline sfx --story-id pilot_scene --shot-id shot_001 --label "soft wind"
+```
+
+検索語を手動で変えたい場合:
+
+```powershell
+python -m anime_studio.phase6_pipeline sfx --story-id pilot_scene --shot-id shot_001 --label "soft wind" --asset-query "wind ambience" --asset-limit 5
+```
+
 ## モーションcueを追加する
 
 ```powershell
@@ -102,5 +115,4 @@ manifests/storyboards/pilot_scene/phase6_manifest.json
 
 ## 次の拡張候補
 
-- SFX素材の自動タグ付けとAsset Library検索へ接続する。
 - motion cueをより詳細なUnity AnimationClipへ変換する。
