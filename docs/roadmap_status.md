@@ -5,10 +5,10 @@ READMEの大枠ロードマップを、現在の実装状況に合わせて更�
 
 ## 現在地
 
-現在は **Phase 6: 拡張** の後半です。
-Phase 4とPhase 5の最小実装は通過済みで、Phase 6では音声、口パク、SFX、motionをShot単位で管理し、Unity Timelineへ渡す流れを作っています。
+現在は **Phase 7: 編集/Timeline** の最小完成地点です。
+Phase 4〜6で作った採用済みShot、音声、SFX、口パク、motionを `edit_timeline_manifest.json` に統合し、Unity Timelineへ仮配置できる入口まで到達しています。
 
-Phase 7へ入る前に、Phase 6の補助manifestを統合し、編集用Timeline manifestの設計を固める段階です。
+次はPhase 7を磨き込み、外部編集ツール連携やTimeline再生成時の編集保護へ進む段階です。
 
 ## Phase別ステータス
 
@@ -19,36 +19,30 @@ Phase 7へ入る前に、Phase 6の補助manifestを統合し、編集用Timelin
 | Phase 3 | LoRA学習 | 完了寄り | Kohya低VRAM設定、LoRA結果登録、manifest、ComfyUI workflow exportを作成済み |
 | Phase 4 | ショット制作 | 完了寄り | Storyboard、ShotEditor、camera/lighting、draft生成、結果採用管理、Unity selected shots連携を作成済み |
 | Phase 5 | 自動化 | 完了寄り | Shot Suggestion AI、RenderQueue、Asset Library連携、ショット単位生成/管理を作成済み |
-| Phase 6 | 拡張 | 進行中 | voice、lip-sync、SFX、motion、Unity Timeline仮配置、SFX候補採用、motion clip planまで到達 |
-| Phase 7 | 編集/Timeline | 設計中 | edit timeline manifest、Unity編集Timeline生成、外部編集ツール連携の入口を設計中 |
+| Phase 6 | 拡張 | 完了寄り | voice、lip-sync、SFX、motion、Unity Timeline仮配置、SFX候補採用、motion clip planまで到達 |
+| Phase 7 | 編集/Timeline | 最小完成 | edit timeline manifest、Unity importer、Unity Timeline Builderの入口を作成済み |
 
-## Phase 6で残っていること
-
-1. `phase6_manifest.json` に補助manifest参照を追加する。
-2. Unity Timeline Builderで `motion_clip_plan.json` を優先利用する。
-3. ShotEditorにPhase6 status summaryを表示する。
-4. voice/SFXのasset存在チェックとfallback理由を見える化する。
-5. Docs上のPhase 6完了条件をREADMEへ反映する。
-
-## Phase 7で最初に作るもの
+## Phase 7でできていること
 
 1. `timeline_manifest.py`
    - `selected_shots.json` と `phase6_manifest.json` を読み、`edit_timeline_manifest.json` を作る。
 2. `tests/test_timeline_manifest.py`
-   - Shot順、clip時間、track分割、fallbackを確認する。
-3. `docs/phase7_timeline_editing_design.md`
-   - Phase 7の編集manifest、track設計、Unity連携方針を管理する。
-4. Unity importer sample
-   - Python側manifestが固まってから、Unity ScriptableObject化に進む。
+   - Shot順、clip時間、track分割、Phase6補助manifest参照を確認する。
+3. Unity `EditTimelineLibrary`
+   - 編集Timeline用manifestをUnity ScriptableObjectとして保持する。
+4. Unity `EditTimelineManifestImporter`
+   - `edit_timeline_manifest.json` をUnity assetへ変換する。
+5. Unity `EditTimelineBuilder`
+   - video、audio、signal、animation trackをTimelineへ仮配置する。
 
 ## 直近の推奨タスク
 
 優先順は次の通りです。
 
-1. Phase6 manifestへ `supplemental_manifests` を追加する。
-2. `timeline_manifest.py` の最小プロトタイプを作る。
-3. `edit_timeline_manifest.json` をUnityに読み込むImporterを作る。
-4. Unity Timeline Builderでvideo/audio/signal/animation trackを統合生成する。
+1. Unity Timeline再生成時に既存編集を保護する。
+2. ShotEditorにTimeline readinessを表示する。
+3. FFmpeg concat / EDL / XML exportを追加する。
+4. BGM、環境音、音量automationを追加する。
 5. READMEのロードマップ表記を現在地に合わせて更新する。
 
 ## 設計方針
