@@ -56,6 +56,53 @@ Unity Projectへ `integrations/unity/Assets/AIAnimeStudio` をコピーして使
 5. `AI Anime Studio > Create Timeline From Edit Timeline Library` を実行する。
 6. `Assets/AIAnimeStudio/Timelines/<story_id>/` にTimeline asset、SignalAsset、AnimationClipが作成される。
 
+## Unity再生成保護
+
+Timeline Builderは、既存のTimeline assetを上書きせず、毎回次のようなrevisionフォルダへ新規生成します。
+
+```text
+Assets/AIAnimeStudio/Timelines/<story_id>/Revision_001_YYYYMMDD_HHMMSS/
+```
+
+生成後、`EditTimelineLibrary.asset` には次の情報が保存されます。
+
+- `preserveExistingTimelineEdits`: 既存編集を守る保護モード。
+- `timelineRevision`: 最後に生成したrevision番号。
+- `lastGeneratedTimelineAssetPath`: 最後に作成したTimeline asset。
+- `lastGeneratedRevisionFolder`: 最後に作成したrevisionフォルダ。
+
+各revisionには `timeline_build_report.json` も出力されます。
+これにより、手で調整した古いTimelineを残したまま、新しいmanifestから別Timelineを作れます。
+
+## 外部編集export
+
+`edit_timeline_manifest.json` から、軽量な編集受け渡しファイルを生成できます。
+
+```powershell
+python -m anime_studio.edit_export --story-id pilot_scene
+```
+
+出力:
+
+```text
+manifests/storyboards/pilot_scene/edit_exports/
+```
+
+生成されるファイル:
+
+| file | 内容 |
+| --- | --- |
+| `ffmpeg_concat.txt` | FFmpeg concat demuxer向けの素材リスト |
+| `timeline.edl` | CMX 3600風の簡易EDL |
+| `timeline.fcpxml` | FCPXML風の簡易XML |
+| `edit_export_manifest.json` | export結果の台帳 |
+
+形式を絞る場合:
+
+```powershell
+python -m anime_studio.edit_export --story-id pilot_scene --formats ffmpeg,edl
+```
+
 ## 現在の完成範囲
 
 - 採用済みShotだけを `video_main` へ出力する。
@@ -63,16 +110,18 @@ Unity Projectへ `integrations/unity/Assets/AIAnimeStudio` をコピーして使
 - lip-sync visemeをSignalTrack用markerとして出力する。
 - motion clip planをAnimationTrack用clipとして出力する。
 - Unity importer / Timeline Builderの軽量サンプルを用意する。
+- Unity Timeline再生成時に既存Timelineを上書きしないrevision方式を用意する。
+- FFmpeg concat / EDL / FCPXMLの軽量exportを用意する。
 
 ## 制限
 
 - Unity側のvideo clipは、最初は画像previewまたはplaceholder GameObjectとして扱います。
-- 外部編集ソフト向けEDL/XML書き出しは未実装です。
+- EDL/FCPXMLは初期の受け渡し用で、編集ソフト固有機能の完全対応ではありません。
 - 音量フェード、BGM専用track、複数レイヤー合成は後続拡張です。
 
 ## 次の拡張候補
 
-- Unity Timeline上のclip再生成時に既存編集を保護する。
-- FFmpeg concat / EDL / XML exportを追加する。
+- Timeline revisionの比較/採用UIを追加する。
+- FFmpegでpreview movieを実際に書き出す。
 - BGM、環境音、音量automationを追加する。
 - ShotEditorにTimeline readinessを表示する。
