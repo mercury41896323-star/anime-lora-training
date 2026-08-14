@@ -173,19 +173,49 @@ Phase 7の最小プロトタイプとして、次を実装済みです。
 - `integrations/unity/Assets/AIAnimeStudio/Runtime/EditTimelineLibrary.cs`: Unity側で編集Timeline manifestを保持する。
 - `integrations/unity/Assets/AIAnimeStudio/Editor/EditTimelineManifestImporter.cs`: `edit_timeline_manifest.json` をUnity assetへ変換する。
 - `integrations/unity/Assets/AIAnimeStudio/Editor/EditTimelineBuilder.cs`: video/audio/signal/animation trackをTimelineへ仮配置する。
+- Unity Timeline Builder: 既存Timelineを上書きせず、revisionフォルダへ新規生成して `timeline_build_report.json` を残す。
+- `src/anime_studio/edit_export.py`: FFmpeg concat、CMX 3600風EDL、FCPXML風XMLを書き出す。
+- `tests/test_edit_export.py`: edit exportの生成物とclip数を検証する。
+
+## 再生成保護方針
+
+Unity側のTimeline生成は「差し替え」ではなく「新revision作成」を基本にします。
+
+```text
+Assets/AIAnimeStudio/Timelines/<story_id>/Revision_001_YYYYMMDD_HHMMSS/
+Assets/AIAnimeStudio/Timelines/<story_id>/Revision_002_YYYYMMDD_HHMMSS/
+```
+
+この方針により、手で調整したTimeline asset、AnimationClip、SignalAssetを壊さず、新しいmanifestから別案を作れます。
+`EditTimelineLibrary.asset` は最後に生成したrevisionの参照だけを更新し、過去revision自体は変更しません。
+
+## 外部編集export方針
+
+最初の外部編集exportは、`video_main` の採用済みclipだけを対象にします。
+
+| export | 目的 |
+| --- | --- |
+| `ffmpeg_concat.txt` | 素材順とdurationをFFmpegへ渡す |
+| `timeline.edl` | オフライン編集ソフトで読める簡易EDLにする |
+| `timeline.fcpxml` | XMLベースの編集連携へ進む足場にする |
+| `edit_export_manifest.json` | 何を書き出したかを管理する |
+
+voice/SFX/BGMのmixや音量automationは、Timelineが安定した後の拡張にします。
 
 ## Phase 7完了条件
 
 - Storyboardの採用済みShotだけがTimeline manifestへ出る。
 - Shot durationに沿ってclipの開始時間が連続する。
 - 音声、SFX、口パク、motionがShot内相対時間からTimeline絶対時間へ変換される。
-- Unity側でTimelineを再生成しても、既存manifestを壊さない。
+- Unity側でTimelineを再生成しても、既存Timeline編集を壊さない。
+- FFmpeg/EDL/FCPXML用の軽量exportができる。
 - GPUを使わずに全体の構造検証ができる。
 
 ## 後続拡張
 
-- FFmpeg用concat list/export。
-- Premiere/DaVinci向けEDL/XML書き出し。
+- Timeline revisionの比較/採用UI。
+- FFmpegでpreview movieを書き出す実行wrapper。
+- Premiere/DaVinci向けEDL/XML互換性の磨き込み。
 - Shotごとの編集メモ、NG理由、差し替え履歴。
 - 音量、フェード、BGM track、環境音track。
 - Unity RecorderやComfyUI render queueとの連携。
