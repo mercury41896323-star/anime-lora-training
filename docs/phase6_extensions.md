@@ -83,9 +83,13 @@ manifests/storyboards/pilot_scene/phase6_manifest.json
 - motion cues
 - Unity Timeline向けtrack hint
 
+## Unity Timeline連携
+
+`phase6_manifest.json` をUnity側で読み込み、`AudioTrack`、`SignalTrack`、`AnimationTrack` へ仮配置するサンプルを追加しています。
+詳しくは `docs/unity_phase6_timeline.md` を参照してください。
+
 ## 次の拡張候補
 
-- Unity importerで `phase6_manifest.json` を読み、AudioTrack / SignalTrack / AnimationTrackへ仮配置する。
 - 実音声ファイルから口パクを解析するproviderを追加する。
 - SFX素材の自動タグ付けとAsset Library検索へ接続する。
-- motion cueをUnity TimelineのAnimationClipへ変換する。
+- motion cueをより詳細なUnity AnimationClipへ変換する。
