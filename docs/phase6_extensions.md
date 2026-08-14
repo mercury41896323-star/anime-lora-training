@@ -62,6 +62,18 @@ python -m anime_studio.phase6_pipeline lip-sync --story-id pilot_scene
 storyboards/pilot_scene/lip_sync_plan.json
 ```
 
+## 実音声WAVから口パク計画を作る
+
+録音済み、または生成済みの `.wav` 音声が `voice_asset_path` に紐づいている場合は、軽量なWAV RMS解析providerを使えます。
+GPUや外部AIモデルは使わず、音声の長さと音量変化から仮のviseme timingを作ります。
+
+```powershell
+python -m anime_studio.phase6_pipeline lip-sync --story-id pilot_scene --provider wav-rms
+```
+
+出力される `lip_sync_plan.json` には、`method: wav_rms_viseme_timing`、`provider: wav-rms`、`analysis.sample_rate`、`analysis.window_count` などが入ります。
+`.wav` が見つからない場合や未対応形式の場合は、従来のテキストplaceholderへ安全にfallbackします。
+
 ## Unity / 編集用manifestへ統合する
 
 ```powershell
@@ -90,6 +102,5 @@ manifests/storyboards/pilot_scene/phase6_manifest.json
 
 ## 次の拡張候補
 
-- 実音声ファイルから口パクを解析するproviderを追加する。
 - SFX素材の自動タグ付けとAsset Library検索へ接続する。
 - motion cueをより詳細なUnity AnimationClipへ変換する。
