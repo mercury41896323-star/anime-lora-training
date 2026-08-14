@@ -17,6 +17,13 @@ python -m anime_studio.cli library list --source comfyui_result
 python -m anime_studio.cli library list --query smile
 ```
 
+SFX素材を登録している場合は、Phase 6のSFX cue作成時に候補検索にも使われます。
+`kind` は `sfx`、`audio`、または既存分類に合わせた `other` を使えます。
+
+```powershell
+python -m anime_studio.cli library list --kind sfx --query wind
+```
+
 JSONとして確認する場合:
 
 ```powershell
