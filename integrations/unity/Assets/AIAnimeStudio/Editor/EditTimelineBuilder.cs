@@ -54,14 +54,15 @@ namespace AIAnimeStudio.Editor
 
             string storyId = SafeFileName(string.IsNullOrEmpty(library.storyId) ? "storyboard" : library.storyId);
             string timelineFolder = EnsureAssetFolder("Assets/AIAnimeStudio/Timelines/" + storyId);
-            string animationFolder = EnsureAssetFolder(timelineFolder + "/EditAnimations");
-            string signalFolder = EnsureAssetFolder(timelineFolder + "/EditSignals");
+            string revisionFolder = CreateProtectedRevisionFolder(timelineFolder, storyId);
+            string animationFolder = EnsureAssetFolder(revisionFolder + "/EditAnimations");
+            string signalFolder = EnsureAssetFolder(revisionFolder + "/EditSignals");
             string rootName = storyId + "_Edit_Timeline";
-            GameObject root = new GameObject(rootName);
+            GameObject root = new GameObject(rootName + "_Revision_" + (library.timelineRevision + 1).ToString("000"));
             PlayableDirector director = root.AddComponent<PlayableDirector>();
             TimelineAsset timeline = ScriptableObject.CreateInstance<TimelineAsset>();
             string timelinePath = AssetDatabase.GenerateUniqueAssetPath(
-                timelineFolder + "/" + SafeFileName(rootName) + ".playable"
+                revisionFolder + "/" + SafeFileName(rootName) + ".playable"
             );
             AssetDatabase.CreateAsset(timeline, timelinePath);
 
@@ -87,8 +88,14 @@ namespace AIAnimeStudio.Editor
 
             director.playableAsset = timeline;
             director.timeUpdateMode = DirectorUpdateMode.GameTime;
+            library.timelineRevision += 1;
+            library.lastGeneratedTimelineAssetPath = timelinePath;
+            library.lastGeneratedRevisionFolder = revisionFolder;
+            library.preserveExistingTimelineEdits = true;
+            WriteBuildReport(revisionFolder, library, timelinePath);
             EditorUtility.SetDirty(timeline);
             EditorUtility.SetDirty(director);
+            EditorUtility.SetDirty(library);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             return director;
@@ -347,6 +354,67 @@ namespace AIAnimeStudio.Editor
             }
 
             return assetFolder;
+        }
+
+        private static string CreateProtectedRevisionFolder(string timelineFolder, string storyId)
+        {
+            int revision = NextRevisionNumber(timelineFolder);
+            string revisionName = "Revision_" + revision.ToString("000") + "_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+            return EnsureAssetFolder(timelineFolder + "/" + SafeFileName(revisionName));
+        }
+
+        private static int NextRevisionNumber(string timelineFolder)
+        {
+            string fullTimelineFolder = AssetPathToFullPath(timelineFolder);
+            if (!Directory.Exists(fullTimelineFolder))
+            {
+                return 1;
+            }
+
+            int highestRevision = 0;
+            foreach (string directory in Directory.GetDirectories(fullTimelineFolder, "Revision_*"))
+            {
+                string name = Path.GetFileName(directory);
+                string[] parts = name.Split('_');
+                if (parts.Length >= 2 && int.TryParse(parts[1], out int parsed))
+                {
+                    highestRevision = Math.Max(highestRevision, parsed);
+                }
+            }
+
+            return highestRevision + 1;
+        }
+
+        private static void WriteBuildReport(string revisionFolder, EditTimelineLibrary library, string timelinePath)
+        {
+            string reportPath = revisionFolder + "/timeline_build_report.json";
+            string report = "{\n"
+                + "  \"schema_version\": 1,\n"
+                + "  \"manifest_type\": \"unity_timeline_build_report\",\n"
+                + "  \"generated_at\": \"" + DateTime.UtcNow.ToString("o") + "\",\n"
+                + "  \"story_id\": \"" + EscapeJson(library.storyId) + "\",\n"
+                + "  \"source_manifest\": \"" + EscapeJson(library.manifestPath) + "\",\n"
+                + "  \"timeline_asset\": \"" + EscapeJson(timelinePath) + "\",\n"
+                + "  \"revision_folder\": \"" + EscapeJson(revisionFolder) + "\",\n"
+                + "  \"protection_policy\": \"create_new_revision_never_overwrite_existing_timeline\"\n"
+                + "}\n";
+            File.WriteAllText(AssetPathToFullPath(reportPath), report);
+            AssetDatabase.ImportAsset(reportPath);
+        }
+
+        private static string AssetPathToFullPath(string assetPath)
+        {
+            string relative = assetPath.StartsWith("Assets/", StringComparison.Ordinal)
+                ? assetPath.Substring("Assets/".Length)
+                : assetPath;
+            return Path.GetFullPath(Path.Combine(Application.dataPath, relative));
+        }
+
+        private static string EscapeJson(string value)
+        {
+            return string.IsNullOrEmpty(value)
+                ? ""
+                : value.Replace("\\", "\\\\").Replace("\"", "\\\"");
         }
 
         private static string SafeFileName(string value)
