@@ -103,6 +103,50 @@ manifests/storyboards/pilot_scene/edit_exports/
 python -m anime_studio.edit_export --story-id pilot_scene --formats ffmpeg,edl
 ```
 
+## Preview movie
+
+FFmpeg concat exportから、preview movie用の実行planを生成できます。
+標準ではFFmpegを実行せず、コマンドとmanifestだけを書きます。
+
+```powershell
+python -m anime_studio.edit_preview --story-id pilot_scene
+```
+
+統合CLI:
+
+```powershell
+python -m anime_studio.cli edit preview-movie --story-id pilot_scene
+```
+
+出力:
+
+```text
+manifests/storyboards/pilot_scene/preview_movie_plan.json
+outputs/previews/pilot_scene/preview.mp4
+```
+
+実際にFFmpegを実行する場合:
+
+```powershell
+python -m anime_studio.cli edit preview-movie --story-id pilot_scene --run
+```
+
+## Timeline revision review / adopt
+
+Unity側で生成されたrevisionフォルダを確認し、採用revisionをmanifestへ記録できます。
+
+```powershell
+python -m anime_studio.cli edit revision-review --story-id pilot_scene
+python -m anime_studio.cli edit revision-adopt --story-id pilot_scene
+```
+
+出力:
+
+```text
+manifests/storyboards/pilot_scene/timeline_revision_review.json
+manifests/storyboards/pilot_scene/selected_timeline_revision.json
+```
+
 ## 現在の完成範囲
 
 - 採用済みShotだけを `video_main` へ出力する。
@@ -112,6 +156,9 @@ python -m anime_studio.edit_export --story-id pilot_scene --formats ffmpeg,edl
 - Unity importer / Timeline Builderの軽量サンプルを用意する。
 - Unity Timeline再生成時に既存Timelineを上書きしないrevision方式を用意する。
 - FFmpeg concat / EDL / FCPXMLの軽量exportを用意する。
+- FFmpeg preview movie planを生成する。
+- Timeline revisionのreview/adopt manifestを生成する。
+- ShotEditorにTimeline Readinessを表示する。
 
 ## 制限
 
@@ -121,7 +168,7 @@ python -m anime_studio.edit_export --story-id pilot_scene --formats ffmpeg,edl
 
 ## 次の拡張候補
 
-- Timeline revisionの比較/採用UIを追加する。
-- FFmpegでpreview movieを実際に書き出す。
+- Timeline revisionの差分表示をより詳細化する。
+- FFmpeg preview movieに音声mixを追加する。
 - BGM、環境音、音量automationを追加する。
-- ShotEditorにTimeline readinessを表示する。
+- ローカルLoRA学習の最初の短時間runへ進む。

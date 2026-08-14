@@ -10,9 +10,9 @@ AIを活用したアニメーション制作支援・学習・生成環境を構
 
 ## 現在のステータス
 
-**Project Restart - Phase 1 基盤構築開始**
+**Phase 7 編集 / Timeline 仕上げ完了寄り**
 
-最初の実装として、RTX 3050 6GB VRAM環境を前提にした軽量なプロジェクト骨格と、GPUを使わずに動作確認できる素材インベントリ生成CLIを追加しました。
+RTX 3050 6GB VRAM環境を前提にした軽量な制作パイプラインとして、キャラクター管理、LoRA学習準備、ComfyUI連携、Storyboard/Shot管理、Phase 6 cue、Unity Timeline handoffまでの入口を実装しています。
 
 現在は次の入口も追加済みです。
 
@@ -26,6 +26,12 @@ AIを活用したアニメーション制作支援・学習・生成環境を構
 - ComfyUI / Unity参照用LoRA manifest生成
 - ComfyUI workflow templateへのLoRA参照差し込み
 - Phase 6向けの音声・リップシンク・効果音・モーションcue台帳
+- 採用済みShotからの `edit_timeline_manifest.json` 生成
+- Unity Timeline再生成時のrevision保護
+- FFmpeg concat / EDL / FCPXML export
+- FFmpeg preview movie plan生成
+- ShotEditorへのTimeline Readiness表示
+- ローカルLoRA学習前のreadiness check / smoke workflow
 
 ## まず動かすもの
 
@@ -445,6 +451,30 @@ template内の`LoraLoader`ノードには`lora_name`、`strength_model`、`stren
 4. モーション関連機能（motion cue台帳）
 
 現在はPhase 6の最小実装として、重いAI推論を呼ばずに、Shot単位で音声、口パク、効果音、モーションをJSON管理し、Unity/編集用の `phase6_manifest.json` へ統合する入口を追加しています。
+
+### Phase 7: 編集 / Timeline
+
+1. 採用済みShotから `edit_timeline_manifest.json` を生成
+2. Unity `EditTimelineLibrary` へimport
+3. Unity TimelineへVideo/Audio/Signal/AnimationTrackを仮配置
+4. 既存Timelineを上書きしないrevision保護
+5. FFmpeg concat / EDL / FCPXML export
+6. FFmpeg preview movie plan生成
+7. ShotEditorへのTimeline Readiness表示
+
+現在はPhase 7の仕上げとして、編集handoffに必要な軽量manifest、Unity revision管理、外部編集export、preview movie planまで到達しています。
+次は、ローカルLoRA学習を始めるための最初の短いtraining smokeに進めます。
+
+### ローカル学習開始準備
+
+学習前に次を確認できます。
+
+```powershell
+python -m anime_studio.cli training readiness --character-id sample_hero
+python -m anime_studio.cli training smoke --character-id sample_hero --pretrained-model C:\models\sd15.safetensors --kohya-root C:\tools\kohya_ss --min-images 1
+```
+
+詳細は `docs/local_training_start.md` を参照してください。
 
 ## 重要な制約
 

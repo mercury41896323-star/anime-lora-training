@@ -12,6 +12,10 @@ dependencies = []
 [project.scripts]
 anime-studio = "anime_studio.cli:main"
 anime-storyboard = "anime_studio.storyboard_cli:main"
+anime-edit-preview = "anime_studio.edit_preview:main"
+anime-edit-export = "anime_studio.edit_export:main"
+anime-timeline-revision = "anime_studio.timeline_revision:main"
+anime-training-readiness = "anime_studio.training_readiness:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

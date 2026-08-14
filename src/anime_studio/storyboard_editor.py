@@ -32,6 +32,7 @@ def write_storyboard_editor(
     camera_by_shot = load_camera_work_map(settings, story_id)
     lighting_by_shot = load_lighting_setup_map(settings, story_id)
     suggestions_by_shot = load_suggestion_map(settings, story_id)
+    timeline_readiness = load_timeline_readiness(settings, story_id)
     editor_path = normalize_editor_path(settings, story_id, output_path)
     editor_path.parent.mkdir(parents=True, exist_ok=True)
     selected_count = sum(1 for result in results if result_decision(result) == "selected")
@@ -50,6 +51,7 @@ def write_storyboard_editor(
             camera_by_shot,
             lighting_by_shot,
             suggestions_by_shot,
+            timeline_readiness,
         ),
         encoding="utf-8",
     )
@@ -70,10 +72,12 @@ def render_storyboard_editor_html(
     camera_by_shot: dict[str, CameraWork] | None = None,
     lighting_by_shot: dict[str, LightingSetup] | None = None,
     suggestions_by_shot: dict[str, dict[str, Any]] | None = None,
+    timeline_readiness: dict[str, Any] | None = None,
 ) -> str:
     camera_by_shot = camera_by_shot or {}
     lighting_by_shot = lighting_by_shot or {}
     suggestions_by_shot = suggestions_by_shot or {}
+    timeline_readiness = timeline_readiness or {}
     results_by_shot: dict[str, list[dict[str, Any]]] = {}
     for result in results:
         results_by_shot.setdefault(str(result.get("shot_id", "")), []).append(result)
@@ -92,9 +96,11 @@ def render_storyboard_editor_html(
             camera_by_shot.get(shot.shot_id),
             lighting_by_shot.get(shot.shot_id),
             suggestions_by_shot.get(shot.shot_id),
+            timeline_readiness,
         )
         for shot in sorted(shots, key=lambda item: item.order)
     )
+    timeline_block = render_timeline_readiness_block(timeline_readiness)
     return f"""<!doctype html>
 <html lang="ja">
 <head>
@@ -138,6 +144,7 @@ def render_storyboard_editor_html(
       <span class="pill">selected: {selected_count}</span>
       <span class="pill">missing: {missing_count}</span>
     </div>
+    {timeline_block}
   </header>
   <main>{shot_sections}</main>
 </body>
@@ -153,9 +160,11 @@ def render_shot_editor_section(
     camera: CameraWork | None = None,
     lighting: LightingSetup | None = None,
     suggestion: dict[str, Any] | None = None,
+    timeline_readiness: dict[str, Any] | None = None,
 ) -> str:
     selected = next((result for result in results if result_decision(result) == "selected"), None)
     status = "selected" if selected else "missing"
+    timeline_status = shot_timeline_status(shot.shot_id, timeline_readiness or {})
     result_cards = "\n".join(render_editor_result_card(settings, editor_path, result) for result in results)
     if not result_cards:
         result_cards = '<p class="muted">No generated results linked yet.</p>'
@@ -166,6 +175,7 @@ def render_shot_editor_section(
   <div>
     <div class="muted">#{shot.order:03d} / {escape(shot.shot_id)} / {escape(status)}</div>
     <h2>{escape(shot.title)}</h2>
+    {timeline_status}
   </div>
   <div class="grid">
     <div class="box">{params}</div>
@@ -177,6 +187,62 @@ def render_shot_editor_section(
     {result_cards}
   </div>
 </section>"""
+
+
+def load_timeline_readiness(settings: AppSettings, story_id: str) -> dict[str, Any]:
+    base = settings.project_root / "manifests" / "storyboards" / story_id
+    edit_manifest_path = base / "edit_timeline_manifest.json"
+    export_manifest_path = base / "edit_exports" / "edit_export_manifest.json"
+    revision_review_path = base / "timeline_revision_review.json"
+    selected_revision_path = base / "selected_timeline_revision.json"
+    edit_manifest = read_json_if_exists(edit_manifest_path)
+    video_shot_ids = {
+        str(clip.get("shot_id", ""))
+        for track in edit_manifest.get("tracks", [])
+        if track.get("track_type") == "video"
+        for clip in track.get("clips", [])
+    }
+    return {
+        "edit_manifest_exists": edit_manifest_path.exists(),
+        "edit_manifest_path": str(edit_manifest_path),
+        "edit_clip_count": int(edit_manifest.get("counts", {}).get("clip_count", 0)) if edit_manifest else 0,
+        "video_shot_ids": sorted(value for value in video_shot_ids if value),
+        "export_manifest_exists": export_manifest_path.exists(),
+        "export_manifest_path": str(export_manifest_path),
+        "revision_review_exists": revision_review_path.exists(),
+        "revision_review_path": str(revision_review_path),
+        "selected_revision_exists": selected_revision_path.exists(),
+        "selected_revision_path": str(selected_revision_path),
+    }
+
+
+def read_json_if_exists(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def render_timeline_readiness_block(readiness: dict[str, Any]) -> str:
+    edit_status = "ready" if readiness.get("edit_manifest_exists") else "needs_attention"
+    export_status = "ready" if readiness.get("export_manifest_exists") else "needs_attention"
+    revision_status = "ready" if readiness.get("selected_revision_exists") else "needs_attention"
+    return f"""<div class="box timeline-readiness">
+      <div class="muted">Timeline Readiness</div>
+      <p>
+        <span class="badge {edit_status}">edit manifest</span>
+        <span class="badge {export_status}">external export</span>
+        <span class="badge {revision_status}">adopted revision</span>
+      </p>
+      <p class="muted">timeline clips: {escape(str(readiness.get('edit_clip_count', 0)))}</p>
+    </div>"""
+
+
+def shot_timeline_status(shot_id: str, readiness: dict[str, Any]) -> str:
+    if not readiness.get("edit_manifest_exists"):
+        return '<span class="badge needs_attention">timeline manifest missing</span>'
+    if shot_id in set(readiness.get("video_shot_ids", [])):
+        return '<span class="badge ready">timeline ready</span>'
+    return '<span class="badge needs_attention">not in timeline</span>'
 
 
 def load_suggestion_map(settings: AppSettings, story_id: str) -> dict[str, dict[str, Any]]:
