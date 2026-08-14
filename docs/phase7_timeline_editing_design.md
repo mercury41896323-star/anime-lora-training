@@ -164,6 +164,16 @@ ScriptableObjectからTimelineAssetを作ります。
 
 Unity側の実asset生成は、Python側manifestが固まった後に進めます。
 
+## 実装済みの最小範囲
+
+Phase 7の最小プロトタイプとして、次を実装済みです。
+
+- `src/anime_studio/timeline_manifest.py`: `edit_timeline_manifest.json` を生成する。
+- `tests/test_timeline_manifest.py`: 採用済みShotだけが出ること、track分割、時間計算、補助manifest参照を検証する。
+- `integrations/unity/Assets/AIAnimeStudio/Runtime/EditTimelineLibrary.cs`: Unity側で編集Timeline manifestを保持する。
+- `integrations/unity/Assets/AIAnimeStudio/Editor/EditTimelineManifestImporter.cs`: `edit_timeline_manifest.json` をUnity assetへ変換する。
+- `integrations/unity/Assets/AIAnimeStudio/Editor/EditTimelineBuilder.cs`: video/audio/signal/animation trackをTimelineへ仮配置する。
+
 ## Phase 7完了条件
 
 - Storyboardの採用済みShotだけがTimeline manifestへ出る。
