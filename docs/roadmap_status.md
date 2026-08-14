@@ -5,10 +5,10 @@ READMEの大枠ロードマップを、現在の実装状況に合わせて更�
 
 ## 現在地
 
-現在は **Phase 7: 編集/Timeline** の最小完成地点です。
-Phase 4〜6で作った採用済みShot、音声、SFX、口パク、motionを `edit_timeline_manifest.json` に統合し、Unity Timelineへ仮配置できる入口まで到達しています。
+現在は **Phase 7: 編集/Timeline** の外部handoff入口まで到達しています。
+Phase 4〜6で作った採用済みShot、音声、SFX、口パク、motionを `edit_timeline_manifest.json` に統合し、Unity Timelineへ保護つきrevision生成できる状態です。
 
-次はPhase 7を磨き込み、外部編集ツール連携やTimeline再生成時の編集保護へ進む段階です。
+さらに、FFmpeg concat、EDL、FCPXMLの軽量exportも入り、次はpreview movie生成やTimeline revision比較へ進む段階です。
 
 ## Phase別ステータス
 
@@ -20,7 +20,7 @@ Phase 4〜6で作った採用済みShot、音声、SFX、口パク、motionを `
 | Phase 4 | ショット制作 | 完了寄り | Storyboard、ShotEditor、camera/lighting、draft生成、結果採用管理、Unity selected shots連携を作成済み |
 | Phase 5 | 自動化 | 完了寄り | Shot Suggestion AI、RenderQueue、Asset Library連携、ショット単位生成/管理を作成済み |
 | Phase 6 | 拡張 | 完了寄り | voice、lip-sync、SFX、motion、Unity Timeline仮配置、SFX候補採用、motion clip planまで到達 |
-| Phase 7 | 編集/Timeline | 最小完成 | edit timeline manifest、Unity importer、Unity Timeline Builderの入口を作成済み |
+| Phase 7 | 編集/Timeline | 完了寄り | edit timeline manifest、Unity importer、Timeline保護つき再生成、FFmpeg/EDL/FCPXML exportを作成済み |
 
 ## Phase 7でできていること
 
@@ -34,14 +34,18 @@ Phase 4〜6で作った採用済みShot、音声、SFX、口パク、motionを `
    - `edit_timeline_manifest.json` をUnity assetへ変換する。
 5. Unity `EditTimelineBuilder`
    - video、audio、signal、animation trackをTimelineへ仮配置する。
+6. Unity Timeline再生成保護
+   - 既存Timelineを上書きせず、revisionフォルダへ新規生成する。
+7. `edit_export.py`
+   - FFmpeg concat、EDL、FCPXMLを書き出す。
 
 ## 直近の推奨タスク
 
 優先順は次の通りです。
 
-1. Unity Timeline再生成時に既存編集を保護する。
-2. ShotEditorにTimeline readinessを表示する。
-3. FFmpeg concat / EDL / XML exportを追加する。
+1. FFmpegでpreview movieを書き出す実行wrapperを追加する。
+2. Timeline revisionの比較/採用UIを作る。
+3. ShotEditorにTimeline readinessを表示する。
 4. BGM、環境音、音量automationを追加する。
 5. READMEのロードマップ表記を現在地に合わせて更新する。
 
