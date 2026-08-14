@@ -75,6 +75,7 @@ namespace AIAnimeStudio.Editor
                 existing.frameRate = library.frameRate;
                 existing.durationSeconds = library.durationSeconds;
                 existing.tracks = library.tracks;
+                existing.preserveExistingTimelineEdits = true;
                 EditorUtility.SetDirty(existing);
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
