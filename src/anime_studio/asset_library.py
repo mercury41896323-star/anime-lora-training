@@ -3,10 +3,14 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 from .character_profile import load_character_profile, validate_character_id
 from .settings import AppSettings
+
+
+ASSET_QUERY_PATTERN = re.compile(r"[a-z0-9_./-]+|[一-龥ぁ-んァ-ンー]+", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -101,6 +105,29 @@ def write_asset_library_index(
     return output
 
 
+def search_asset_library(
+    settings: AppSettings,
+    query: str,
+    kinds: list[str] | tuple[str, ...] | None = None,
+    character_id: str | None = None,
+    source: str | None = None,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    if limit <= 0:
+        return []
+    allowed_kinds = {item.lower() for item in kinds or []}
+    tokens = tokenize_asset_query(query)
+    matches: list[tuple[int, AssetLibraryItem]] = []
+    for item in collect_asset_library(settings=settings, character_id=character_id, source=source):
+        if allowed_kinds and item.kind.lower() not in allowed_kinds:
+            continue
+        score = score_asset_library_item(item, tokens)
+        if score > 0 or not tokens:
+            matches.append((score, item))
+    matches.sort(key=lambda pair: (-pair[0], pair[1].character_id, pair[1].stored_path))
+    return [asset_library_item_reference(item, score) for score, item in matches[:limit]]
+
+
 def list_character_dirs(settings: AppSettings, character_id: str | None) -> list[Path]:
     characters_dir = settings.assets.processed / "characters"
     if character_id:
@@ -127,6 +154,41 @@ def matches_filters(
         if needle not in haystack:
             return False
     return True
+
+
+def tokenize_asset_query(query: str) -> list[str]:
+    return [match.group(0).lower() for match in ASSET_QUERY_PATTERN.finditer(query)]
+
+
+def score_asset_library_item(item: AssetLibraryItem, tokens: list[str]) -> int:
+    if not tokens:
+        return 1
+    haystack = json.dumps(asdict(item), ensure_ascii=False).lower()
+    filename = Path(item.stored_path).stem.lower()
+    score = 0
+    for token in tokens:
+        if token in haystack:
+            score += 1
+        if token and token in filename:
+            score += 2
+        metadata_tags = item.metadata.get("tags")
+        if isinstance(metadata_tags, list) and token in {str(tag).lower() for tag in metadata_tags}:
+            score += 3
+    return score
+
+
+def asset_library_item_reference(item: AssetLibraryItem, score: int) -> dict[str, Any]:
+    return {
+        "character_id": item.character_id,
+        "display_name": item.display_name,
+        "kind": item.kind,
+        "source": item.source,
+        "stored_path": item.stored_path,
+        "original_path": item.original_path,
+        "exists": item.exists,
+        "score": score,
+        "metadata": item.metadata,
+    }
 
 
 def asset_exists(settings: AppSettings, stored_path: str) -> bool:
