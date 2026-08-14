@@ -9,6 +9,7 @@ import wave
 from pathlib import Path
 from typing import Any
 
+from .asset_library import search_asset_library
 from .lora_registry import project_relative_path, utc_timestamp
 from .settings import AppSettings
 from .storyboard import Shot, get_storyboard_path, load_storyboard
@@ -20,7 +21,36 @@ DEFAULT_LANGUAGE = "ja"
 DEFAULT_VOICE_CHARS_PER_SECOND = 8.0
 DEFAULT_SFX_DURATION_SECONDS = 1.0
 DEFAULT_MOTION_DURATION_SECONDS = 1.0
+DEFAULT_SFX_ASSET_LIMIT = 3
+SFX_ASSET_KINDS = ("sfx", "audio", "other")
 SUPPORTED_LIP_SYNC_PROVIDERS = {"text", "wav-rms"}
+SFX_TAG_PATTERN = re.compile(r"[a-z0-9_-]+|[一-龥ぁ-んァ-ンー]+", re.IGNORECASE)
+SFX_TAG_KEYWORDS = {
+    "ambience": ("ambience",),
+    "ambient": ("ambience",),
+    "atmos": ("ambience",),
+    "bgm": ("music",),
+    "door": ("door", "impact"),
+    "explosion": ("explosion", "impact"),
+    "fire": ("fire",),
+    "footstep": ("footstep", "movement"),
+    "footsteps": ("footstep", "movement"),
+    "hit": ("impact",),
+    "impact": ("impact",),
+    "magic": ("magic",),
+    "rain": ("rain", "water", "ambience"),
+    "soft": ("soft",),
+    "sparkle": ("magic", "sparkle"),
+    "thunder": ("thunder", "impact"),
+    "water": ("water",),
+    "wind": ("wind", "ambience"),
+    "whoosh": ("whoosh", "movement"),
+    "風": ("wind", "ambience"),
+    "雨": ("rain", "water", "ambience"),
+    "足音": ("footstep", "movement"),
+    "爆発": ("explosion", "impact"),
+    "魔法": ("magic",),
+}
 
 
 @dataclass(frozen=True)
@@ -94,6 +124,8 @@ def add_sfx_cue(
     duration_seconds: float = DEFAULT_SFX_DURATION_SECONDS,
     volume: float = 1.0,
     tags: list[str] | None = None,
+    asset_query: str = "",
+    asset_limit: int = DEFAULT_SFX_ASSET_LIMIT,
     notes: str = "",
 ) -> CueWriteResult:
     shot = find_shot(settings, story_id, shot_id)
@@ -102,6 +134,10 @@ def add_sfx_cue(
     validate_positive(duration_seconds, "duration_seconds")
     if volume < 0:
         raise ValueError("volume must be 0 or greater.")
+    auto_tags = infer_sfx_tags(label=label, asset_path=asset_path)
+    resolved_tags = normalize_sfx_tags(tags) if tags else auto_tags
+    candidate_query = asset_query.strip() or build_sfx_asset_query(label, resolved_tags)
+    asset_candidates = suggest_sfx_asset_candidates(settings, candidate_query, asset_limit)
     cue_id = build_cue_id("sfx", shot_id, label)
     cue = {
         "cue_id": cue_id,
@@ -112,7 +148,11 @@ def add_sfx_cue(
         "start_seconds": start_seconds,
         "duration_seconds": duration_seconds,
         "volume": volume,
-        "tags": tags or [],
+        "tags": resolved_tags,
+        "auto_tags": auto_tags,
+        "tag_source": "manual" if tags else "auto",
+        "asset_library_query": candidate_query,
+        "asset_library_candidates": asset_candidates,
         "notes": notes,
         "updated_at": utc_timestamp(),
     }
@@ -203,10 +243,7 @@ def export_phase6_manifest(
                 "schema_version": 1,
                 "manifest_type": "storyboard_phase6_manifest",
                 "generated_at": utc_timestamp(),
-                "story": {
-                    "story_id": storyboard.story_id,
-                    "title": storyboard.title,
-                },
+                "story": {"story_id": storyboard.story_id, "title": storyboard.title},
                 "counts": {
                     "shot_count": len(shots),
                     "voice_count": sum(len(items) for items in voice_by_shot.values()),
@@ -296,7 +333,6 @@ def build_wav_rms_visemes(
     path = normalize_project_path(settings, voice_asset_path)
     if not path.exists() or path.suffix.lower() != ".wav":
         return build_audio_fallback_result(text, fallback_duration_seconds, "missing_or_unsupported_wav")
-
     try:
         with wave.open(str(path), "rb") as wav_file:
             sample_rate = wav_file.getframerate()
@@ -314,10 +350,8 @@ def build_wav_rms_visemes(
                 energies.append(calculate_pcm_rms(frame_bytes, sample_width, channel_count))
     except (wave.Error, EOFError, OSError, ValueError):
         return build_audio_fallback_result(text, fallback_duration_seconds, "wav_read_failed")
-
     if not energies:
         return build_audio_fallback_result(text, fallback_duration_seconds, "empty_wav")
-
     max_energy = max(energies) or 1.0
     letters = [character for character in text if not character.isspace()]
     visemes: list[dict[str, float | str]] = []
@@ -330,13 +364,7 @@ def build_wav_rms_visemes(
             mouth = estimate_mouth_shape(letters[min(index, len(letters) - 1)])
         else:
             mouth = "neutral"
-        visemes.append(
-            {
-                "time_seconds": time_seconds,
-                "mouth": mouth,
-                "energy": round(normalized_energy, 3),
-            }
-        )
+        visemes.append({"time_seconds": time_seconds, "mouth": mouth, "energy": round(normalized_energy, 3)})
     visemes.append({"time_seconds": round(duration_seconds, 3), "mouth": "closed", "energy": 0.0})
     return {
         "method": "wav_rms_viseme_timing",
@@ -353,19 +381,12 @@ def build_wav_rms_visemes(
     }
 
 
-def build_audio_fallback_result(
-    text: str,
-    fallback_duration_seconds: float,
-    reason: str,
-) -> dict[str, Any]:
+def build_audio_fallback_result(text: str, fallback_duration_seconds: float, reason: str) -> dict[str, Any]:
     return {
         "method": "placeholder_viseme_timing",
         "duration_seconds": fallback_duration_seconds,
         "visemes": build_placeholder_visemes(text, fallback_duration_seconds),
-        "analysis": {
-            "provider": "text",
-            "fallback_reason": reason,
-        },
+        "analysis": {"provider": "text", "fallback_reason": reason},
     }
 
 
@@ -387,19 +408,45 @@ def calculate_pcm_rms(frame_bytes: bytes, sample_width: int, channel_count: int)
     return (squared_sum / len(mono_samples)) ** 0.5
 
 
+def infer_sfx_tags(label: str, asset_path: str | Path = "") -> list[str]:
+    source_text = f"{label} {Path(asset_path).stem if asset_path else ''}"
+    tags: list[str] = []
+    for token in SFX_TAG_PATTERN.findall(source_text.lower()):
+        for tag in SFX_TAG_KEYWORDS.get(token, (token,)):
+            append_unique_tag(tags, tag)
+    return tags[:12]
+
+
+def normalize_sfx_tags(tags: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for tag in tags:
+        for token in SFX_TAG_PATTERN.findall(str(tag).lower()):
+            append_unique_tag(normalized, token)
+    return normalized
+
+
+def build_sfx_asset_query(label: str, tags: list[str]) -> str:
+    return " ".join(part for part in [label, *tags] if part).strip()
+
+
+def suggest_sfx_asset_candidates(settings: AppSettings, query: str, limit: int = DEFAULT_SFX_ASSET_LIMIT) -> list[dict[str, Any]]:
+    if limit <= 0 or not query.strip():
+        return []
+    return search_asset_library(settings=settings, query=query, kinds=SFX_ASSET_KINDS, limit=limit)
+
+
+def append_unique_tag(tags: list[str], tag: str) -> None:
+    normalized = tag.strip().lower().replace(" ", "_")
+    if normalized and normalized not in tags:
+        tags.append(normalized)
+
+
 def build_placeholder_visemes(text: str, duration_seconds: float) -> list[dict[str, float | str]]:
     letters = [character for character in text if not character.isspace()]
     if not letters:
         return [{"time_seconds": 0.0, "mouth": "closed"}]
     step = duration_seconds / max(len(letters), 1)
-    visemes: list[dict[str, float | str]] = []
-    for index, character in enumerate(letters):
-        visemes.append(
-            {
-                "time_seconds": round(index * step, 3),
-                "mouth": estimate_mouth_shape(character),
-            }
-        )
+    visemes = [{"time_seconds": round(index * step, 3), "mouth": estimate_mouth_shape(character)} for index, character in enumerate(letters)]
     visemes.append({"time_seconds": round(duration_seconds, 3), "mouth": "closed"})
     return visemes
 
@@ -444,18 +491,7 @@ def read_cue_items(path: Path, manifest_type: str) -> list[dict[str, Any]]:
 def write_cue_manifest(path: Path, manifest_type: str, story_id: str, items: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "manifest_type": manifest_type,
-                "story_id": story_id,
-                "updated_at": utc_timestamp(),
-                "items": items,
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-        + "\n",
+        json.dumps({"schema_version": 1, "manifest_type": manifest_type, "story_id": story_id, "updated_at": utc_timestamp(), "items": items}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
 
@@ -556,10 +592,7 @@ def normalize_phase6_manifest_path(settings: AppSettings, story_id: str, output_
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="anime-phase6",
-        description="Lightweight Phase 6 voice, lip-sync, SFX, and motion cues.",
-    )
+    parser = argparse.ArgumentParser(prog="anime-phase6", description="Lightweight Phase 6 voice, lip-sync, SFX, and motion cues.")
     parser.add_argument("--config", default="config/local_6gb.json", help="Path to the local runtime profile.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -583,6 +616,8 @@ def build_parser() -> argparse.ArgumentParser:
     sfx.add_argument("--duration", type=float, default=DEFAULT_SFX_DURATION_SECONDS, help="Cue duration.")
     sfx.add_argument("--volume", type=float, default=1.0, help="Relative volume.")
     sfx.add_argument("--tags", default="", help="Comma-separated tags.")
+    sfx.add_argument("--asset-query", default="", help="Optional Asset Library search query. Defaults to the label and SFX tags.")
+    sfx.add_argument("--asset-limit", type=int, default=DEFAULT_SFX_ASSET_LIMIT, help="Maximum Asset Library candidates stored on the cue.")
     sfx.add_argument("--notes", default="", help="Production notes.")
 
     motion = subparsers.add_parser("motion", help="Add or update a motion cue for a shot.")
@@ -598,12 +633,7 @@ def build_parser() -> argparse.ArgumentParser:
     lip_sync = subparsers.add_parser("lip-sync", help="Build a lip-sync timing plan from voice cues.")
     lip_sync.add_argument("--story-id", required=True, help="Storyboard id.")
     lip_sync.add_argument("--output", default=None, help="Lip-sync plan output path.")
-    lip_sync.add_argument(
-        "--provider",
-        choices=sorted(SUPPORTED_LIP_SYNC_PROVIDERS),
-        default="text",
-        help="Lip-sync provider. Use wav-rms for lightweight WAV amplitude analysis.",
-    )
+    lip_sync.add_argument("--provider", choices=sorted(SUPPORTED_LIP_SYNC_PROVIDERS), default="text", help="Lip-sync provider. Use wav-rms for lightweight WAV amplitude analysis.")
 
     export = subparsers.add_parser("export", help="Export a combined Phase 6 manifest for Unity/editing tools.")
     export.add_argument("--story-id", required=True, help="Storyboard id.")
@@ -623,20 +653,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     settings = load_settings(args.config)
     if args.command == "voice":
-        result = add_voice_cue(
-            settings=settings,
-            story_id=args.story_id,
-            shot_id=args.shot_id,
-            text=args.text,
-            speaker=args.speaker,
-            character_id=args.character_id,
-            voice_asset_path=args.voice_asset,
-            emotion=args.emotion,
-            language=args.language,
-            start_seconds=args.start,
-            duration_seconds=args.duration,
-            notes=args.notes,
-        )
+        result = add_voice_cue(settings, args.story_id, args.shot_id, args.text, args.speaker, args.character_id, args.voice_asset, args.emotion, args.language, args.start, args.duration, args.notes)
         print_cue_result("voice cue", result)
         return 0
     if args.command == "sfx":
@@ -650,32 +667,18 @@ def main(argv: list[str] | None = None) -> int:
             duration_seconds=args.duration,
             volume=args.volume,
             tags=[tag.strip() for tag in args.tags.split(",") if tag.strip()],
+            asset_query=args.asset_query,
+            asset_limit=args.asset_limit,
             notes=args.notes,
         )
         print_cue_result("SFX cue", result)
         return 0
     if args.command == "motion":
-        result = add_motion_cue(
-            settings=settings,
-            story_id=args.story_id,
-            shot_id=args.shot_id,
-            target=args.target,
-            motion=args.motion,
-            source=args.source,
-            start_seconds=args.start,
-            duration_seconds=args.duration,
-            intensity=args.intensity,
-            notes=args.notes,
-        )
+        result = add_motion_cue(settings, args.story_id, args.shot_id, args.target, args.motion, args.source, args.start, args.duration, args.intensity, args.notes)
         print_cue_result("motion cue", result)
         return 0
     if args.command == "lip-sync":
-        result = build_lip_sync_plan(
-            settings=settings,
-            story_id=args.story_id,
-            output_path=args.output,
-            provider=args.provider,
-        )
+        result = build_lip_sync_plan(settings=settings, story_id=args.story_id, output_path=args.output, provider=args.provider)
         print(f"Wrote lip-sync plan: {result.manifest_path}")
         print(f"Cues: {result.cue_count}")
         print(f"Provider: {args.provider}")
