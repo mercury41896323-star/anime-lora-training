@@ -29,12 +29,33 @@ def default_scene_capture_dir(video_path: str | Path) -> Path:
 def _load_scenedetect() -> tuple[Any, Any, Any, Any]:
     try:
         from scenedetect import ContentDetector, SceneManager, open_video
-        from scenedetect.output import save_images
+        try:
+            from scenedetect.output import save_images
+        except ImportError:
+            from scenedetect.scene_manager import save_images
     except ImportError as exc:
         raise RuntimeError(
             "PySceneDetect is not installed. Install requirements-scene.txt first."
         ) from exc
     return ContentDetector, SceneManager, open_video, save_images
+
+
+def _frame_number(timecode: Any) -> int:
+    if hasattr(timecode, "frame_num"):
+        return int(timecode.frame_num)
+    return int(timecode.get_frames())
+
+
+def _seconds(timecode: Any) -> float:
+    if hasattr(timecode, "seconds"):
+        return float(timecode.seconds)
+    return float(timecode.get_seconds())
+
+
+def _timecode_string(timecode: Any) -> str:
+    if hasattr(timecode, "get_timecode"):
+        return str(timecode.get_timecode())
+    return str(timecode)
 
 
 def analyze_and_capture_scenes(
@@ -79,11 +100,11 @@ def analyze_and_capture_scenes(
             {
                 "scene_id": f"scene_{index:04d}",
                 "scene_number": index,
-                "start_frame": start.get_frames(),
-                "end_frame": end.get_frames(),
-                "start_timecode": start.get_timecode(),
-                "end_timecode": end.get_timecode(),
-                "duration_seconds": (end - start).get_seconds(),
+                "start_frame": _frame_number(start),
+                "end_frame": _frame_number(end),
+                "start_timecode": _timecode_string(start),
+                "end_timecode": _timecode_string(end),
+                "duration_seconds": _seconds(end) - _seconds(start),
                 "captures": [str(destination / name) for name in saved],
                 "analysis": {
                     "characters": [],
