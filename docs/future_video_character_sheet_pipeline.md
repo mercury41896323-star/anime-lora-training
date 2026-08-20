@@ -1,8 +1,10 @@
 # 将来改修案: Character Sheet / Video Analysis Pipeline
 
-> 状態: **将来改修案 / 未実装**
+> 状態: **一部実装済み / 将来改修継続**
 >
 > この文書は、実キャラクター生成テストで得られた課題を踏まえて、AI Anime Studio の次期改修方針を整理した設計メモです。
+>
+> 2026年8月20日時点では、Video Importer / Shot Detector / Frame Sampler / Asset Classifier / Character Sheet Draft / reviewed-master 再取込 / 2.5D Definition の**初期実装**が `Phase 3.5` として追加されています。将来改修として残っている中心課題は、Character Sheet Importer 本体、Dataset Builder v2、高精度分類、より強い shot boundary 判定です。
 
 ## 背景
 
@@ -132,6 +134,11 @@ Dataset Builder
 
 テンプレートの座標を固定または半固定にすることで、毎回AIに「どこに何があるか」を推測させる必要を減らし、処理速度と安定性を上げます。
 
+## 実装状況
+
+- **未実装**
+- ただし `Character Sheet Draft Generator` と `reviewed / master 再取込` は Phase 3.5 側で先行実装済み
+
 ---
 
 # 2. Video Importer
@@ -141,6 +148,13 @@ Dataset Builder
 mp4などの動画素材をAI Anime Studioへ登録し、後続の解析処理の入口とします。
 
 動画をそのまま1つの学習素材として扱うのではなく、後段でShot単位・フレーム単位・モーション単位に分解します。
+
+## 実装状況
+
+- **初期実装済み**
+- `src/anime_studio/video_importer.py`
+- `src/anime_studio/video_training_pipeline.py`
+- `src/anime_studio/video_phase35_pipeline.py`
 
 ---
 
@@ -163,6 +177,12 @@ Shot 003
 
 最初の実装では、映像の切り替わり検出を中心とした軽量な方式を優先します。
 
+## 実装状況
+
+- **初期実装済み**
+- `src/anime_studio/video_shot_pipeline.py`
+- tag変化と最大長を使った軽量 rule-based 分割
+
 ---
 
 # 4. Frame Sampler
@@ -180,6 +200,13 @@ Shot 003
 - 表情変化の大きいフレームを優先
 - ポーズ変化の大きいフレームを優先
 - Shot開始 / 中間 / 終了フレームを候補化
+
+## 実装状況
+
+- **初期実装済み**
+- `src/anime_studio/video_shot_pipeline.py`
+- start / middle / end 優先 + tag 類似度 / file size 差分による軽量除外
+- `effective_fps` による 60〜300秒動画の入力最適化あり
 
 ---
 
@@ -203,6 +230,15 @@ Asset Classifier
 ```
 
 これにより、1つの動画を1種類の学習だけに使用せず、複数の目的で再利用できるようにします。
+
+## 実装状況
+
+- **初期実装済み**
+- `src/anime_studio/video_shot_pipeline.py`
+- 現在は次を heuristic に分類
+  - Face Angle
+  - Expression
+  - Full Body / Upper Body / Portrait
 
 ---
 
@@ -279,6 +315,11 @@ Asset Classifier
 - Direction Library
 - 演出提案
 - Storyboard / Shot Suggestion AI
+
+## 実装状況
+
+- **未実装**
+- 現在は sampled frame dataset と LoRA向け dataset 生成まで
 
 ---
 
@@ -437,8 +478,8 @@ Final Video
 
 # 現在の位置づけ
 
-この文書に記載している機能は、**現時点では将来改修案であり未実装**です。
+この文書に記載している内容は、**一部がPhase 3.5として初期実装済みで、残りが将来改修として継続中**です。
 
-現在実装済みのPhase 1〜7を破棄するのではなく、既存のCharacterProfile、Asset Library、Storyboard、Shot Suggestion、ComfyUI、Unity Timeline、FFmpeg exportへ接続する新しい入力・解析パイプラインとして追加します。
+現在実装済みの詳細は `docs/phase_3_5_asset_acquisition_character_consistency.md` と `docs/roadmap_status.md` を基準に確認します。
 
-既存機能との互換性を維持しながら段階的に導入します。
+既存のPhase 1〜7を破棄するのではなく、既存のCharacterProfile、Asset Library、Storyboard、Shot Suggestion、ComfyUI、Unity Timeline、FFmpeg exportへ接続する新しい入力・解析パイプラインとして段階的に強化します。
