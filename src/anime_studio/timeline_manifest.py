@@ -43,8 +43,9 @@ def build_edit_timeline_manifest(
     selected_manifest = read_optional_manifest(normalize_editor_manifest_path(settings, story_id, None))
     phase6_manifest = read_optional_manifest(normalize_phase6_manifest_path(settings, story_id, None))
     motion_plan = read_optional_manifest(get_motion_clip_plan_path(settings, story_id))
+    b_control_manifest = read_optional_manifest(get_b_control_manifest_path(settings, story_id))
 
-    shot_entries = build_shot_entries(storyboard.shots, selected_manifest, phase6_manifest)
+    shot_entries = build_shot_entries(storyboard.shots, selected_manifest, phase6_manifest, b_control_manifest)
     tracks = build_tracks(settings, shot_entries, motion_plan)
     duration_seconds = round(
         max((clip["start_seconds"] + clip["duration_seconds"] for track in tracks for clip in track["clips"]), default=0.0),
@@ -93,14 +94,17 @@ def build_shot_entries(
     storyboard_shots: list[Any],
     selected_manifest: dict[str, Any],
     phase6_manifest: dict[str, Any],
+    b_control_manifest: dict[str, Any],
 ) -> list[dict[str, Any]]:
     selected_by_shot = {str(shot.get("shot_id", "")): dict(shot) for shot in selected_manifest.get("shots", [])}
     phase6_by_shot = {str(shot.get("shot_id", "")): dict(shot) for shot in phase6_manifest.get("shots", [])}
+    b_control_by_shot = {str(shot.get("shot_id", "")): dict(shot) for shot in b_control_manifest.get("shots", [])}
     entries: list[dict[str, Any]] = []
     cursor = 0.0
     for shot in sorted(storyboard_shots, key=lambda item: item.order):
         selected = selected_by_shot.get(shot.shot_id)
         phase6 = phase6_by_shot.get(shot.shot_id, {})
+        b_control = b_control_by_shot.get(shot.shot_id, {})
         if selected is None:
             continue
         duration = positive_float(selected.get("duration_seconds", shot.duration_seconds), fallback=shot.duration_seconds or 1.0)
@@ -113,6 +117,7 @@ def build_shot_entries(
                 "timeline_start_seconds": round(cursor, 3),
                 "selected": selected,
                 "phase6": phase6,
+                "b_control": b_control,
             }
         )
         cursor += duration
@@ -173,6 +178,7 @@ def add_video_clip(track: dict[str, Any], entry: dict[str, Any]) -> None:
     selected = entry["selected"]
     result = dict(selected.get("selected_result") or {})
     unity = dict(selected.get("unity") or {})
+    b_control = dict((entry.get("b_control") or {}).get("controls") or {})
     track["clips"].append(
         base_clip(
             clip_id="video_" + entry["shot_id"],
@@ -187,6 +193,7 @@ def add_video_clip(track: dict[str, Any], entry: dict[str, Any]) -> None:
                 "timeline_clip_name": str(unity.get("timeline_clip_name", "")),
                 "addressable_key": str(unity.get("addressable_key", "")),
                 "kind": str(result.get("kind", "")),
+                "b_control": b_control,
             },
         )
     )
@@ -315,11 +322,16 @@ def source_manifest_refs(settings: AppSettings, story_id: str) -> dict[str, str]
         "phase6": project_relative_path(settings, normalize_phase6_manifest_path(settings, story_id, None)),
         "motion_clip_plan": project_relative_path(settings, base / "motion_clip_plan.json"),
         "sfx_asset_review": project_relative_path(settings, base / "sfx_asset_review.json"),
+        "b_control": project_relative_path(settings, base / "b_control_manifest.json"),
     }
 
 
 def get_motion_clip_plan_path(settings: AppSettings, story_id: str) -> Path:
     return settings.project_root / "manifests" / "storyboards" / story_id / "motion_clip_plan.json"
+
+
+def get_b_control_manifest_path(settings: AppSettings, story_id: str) -> Path:
+    return settings.project_root / "manifests" / "storyboards" / story_id / "b_control_manifest.json"
 
 
 def normalize_edit_timeline_manifest_path(settings: AppSettings, story_id: str, output_path: str | Path | None) -> Path:

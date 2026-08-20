@@ -17,7 +17,7 @@ from .comfyui_queue import (
 )
 from .comfyui_results import import_comfyui_results
 from .comfyui_workflow_export import export_comfyui_workflow, list_comfyui_templates
-from .dataset_builder import build_lora_dataset
+from .dataset_builder import build_lora_dataset, build_motion_dataset
 from .edit_export import export_edit_timeline
 from .edit_preview import build_preview_movie
 from .frame_extraction import build_frame_extraction_plan, extract_frames
@@ -38,7 +38,6 @@ from .storyboard_review import set_shot_result_decision, write_storyboard_previe
 from .tagger import finalize_tag_sidecars, generate_auto_tag_records, update_manual_tags
 from .timeline_revision import adopt_timeline_revision, review_timeline_revisions
 from .training_readiness import check_training_readiness, run_training_smoke
-from .video_training_pipeline import run_video_training_smoke
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -198,6 +197,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Queue JSON path. Defaults to queues/comfyui/jobs.json.",
     )
+    storyboard_export_comfyui.add_argument(
+        "--b-control",
+        action="store_true",
+        help="Export workflows in B-control mode with structured pose, face-direction, camera, and lighting hints.",
+    )
     storyboard_link_result = storyboard_subparsers.add_parser(
         "link-result",
         help="Link a generated asset to a storyboard shot.",
@@ -347,6 +351,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Build a LoRA image/caption dataset for one character.",
     )
     dataset_lora.add_argument("--character-id", required=True, help="Character id to export.")
+    dataset_motion = dataset_subparsers.add_parser(
+        "build-motion",
+        help="Build a motion dataset from selected storyboard shots, Phase 6 motion cues, and B-control hints.",
+    )
+    dataset_motion.add_argument("--story-id", required=True, help="Storyboard id to export.")
+    dataset_motion.add_argument(
+        "--output-dir",
+        default=None,
+        help="Motion dataset directory. Defaults to datasets/motion/<story-id>.",
+    )
+    dataset_motion.add_argument(
+        "--manifest",
+        default=None,
+        help="Manifest output path. Defaults to manifests/storyboards/<story-id>/motion_dataset_manifest.json.",
+    )
 
     lora = subparsers.add_parser(
         "lora",
@@ -600,21 +619,6 @@ def build_parser() -> argparse.ArgumentParser:
     training_smoke.add_argument("--min-images", type=int, default=1, help="Minimum image count for smoke readiness.")
     training_smoke.add_argument("--provider", default="baseline", help="Tag provider for smoke auto tags.")
     training_smoke.add_argument("--output", default=None, help="Optional smoke manifest path.")
-    training_video_smoke = training_subparsers.add_parser(
-        "video-smoke",
-        help="Run video import -> frame extraction -> dataset -> Kohya config -> readiness.",
-    )
-    training_video_smoke.add_argument("--character-id", required=True, help="Character id.")
-    training_video_smoke.add_argument("--video", required=True, help="Source video path.")
-    training_video_smoke.add_argument("--pretrained-model", required=True, help="SD base model path or id for generated config.")
-    training_video_smoke.add_argument("--kohya-root", default=".", help="Kohya/sd-scripts root path.")
-    training_video_smoke.add_argument("--fps", type=float, default=1.0, help="Frames per second to sample from the video.")
-    training_video_smoke.add_argument("--min-images", type=int, default=1, help="Minimum image count for smoke readiness.")
-    training_video_smoke.add_argument("--provider", default="baseline", help="Tag provider for smoke auto tags.")
-    training_video_smoke.add_argument("--source-label", default="", help="Optional short label such as baseline clip.")
-    training_video_smoke.add_argument("--skip-extract", action="store_true", help="Skip ffmpeg frame extraction and reuse existing frames.")
-    training_video_smoke.add_argument("--reuse-import", action="store_true", help="Reuse an already imported video entry instead of failing.")
-    training_video_smoke.add_argument("--output", default=None, help="Optional video smoke manifest path.")
     return parser
 
 
@@ -755,10 +759,13 @@ def main(argv: list[str] | None = None) -> int:
             enqueue=args.queue,
             base_url=args.base_url,
             queue_path=args.queue_path,
+            b_control=args.b_control,
         )
         print(f"Wrote storyboard ComfyUI manifest: {result.manifest_path}")
         print(f"Workflows: {len(result.workflows)}")
         print(f"Skipped shots: {len(result.skipped_shots)}")
+        if result.b_control_manifest_path is not None:
+            print(f"B-control manifest: {result.b_control_manifest_path}")
         return 0
 
     if args.command == "storyboard" and args.storyboard_command == "link-result":
@@ -900,6 +907,20 @@ def main(argv: list[str] | None = None) -> int:
             f"Built dataset: {result.dataset_dir} "
             f"({result.image_count} images, {result.caption_count} captions)"
         )
+        return 0
+
+    if args.command == "dataset" and args.dataset_command == "build-motion":
+        result = build_motion_dataset(
+            settings=settings,
+            story_id=args.story_id,
+            output_dir=args.output_dir,
+            manifest_path=args.manifest,
+        )
+        print(f"Built motion dataset: {result.dataset_dir}")
+        print(f"Manifest: {result.manifest_path}")
+        print(f"Entries: {result.entry_count}")
+        print(f"Transitions: {result.transition_count}")
+        print(f"Assets: {result.asset_count}")
         return 0
 
     if args.command == "lora" and args.lora_command == "kohya-config":
@@ -1132,29 +1153,6 @@ def main(argv: list[str] | None = None) -> int:
             output_path=args.output,
         )
         print(f"Wrote training smoke manifest: {result.manifest_path}")
-        print(f"Dataset: {result.dataset_dir}")
-        print(f"Kohya config: {result.kohya_config_dir}")
-        print(f"Ready: {result.ready}")
-        return 0 if result.ready else 1
-
-    if args.command == "training" and args.training_command == "video-smoke":
-        result = run_video_training_smoke(
-            settings=settings,
-            character_id=args.character_id,
-            video_path=args.video,
-            pretrained_model=args.pretrained_model,
-            kohya_root=args.kohya_root,
-            fps=args.fps,
-            min_images=args.min_images,
-            provider=args.provider,
-            source_label=args.source_label,
-            skip_extract=args.skip_extract,
-            reuse_import=args.reuse_import,
-            output_path=args.output,
-        )
-        print(f"Wrote video training smoke manifest: {result.manifest_path}")
-        print(f"Video id: {result.video_id}")
-        print(f"Frames: {result.frame_output_dir}")
         print(f"Dataset: {result.dataset_dir}")
         print(f"Kohya config: {result.kohya_config_dir}")
         print(f"Ready: {result.ready}")

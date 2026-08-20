@@ -2,230 +2,102 @@
 
 Date: 2026-08-16
 
-This note records the result of the current video generation test and the decision to include a future B-control implementation in AI Anime Studio.
+このメモは、動画生成テストから見えた制約と、AI Anime Studio に **B-control** を導入する理由を整理したものです。
 
-## Current conclusion
+## 現時点の整理
 
-The current `anime-lora-training` video test is mainly in **A mode**:
+これまでの短尺動画テストは、主に **A mode** で進めていました。
 
 ```text
-A. Image generation + camera-work video
+A. still image generation + zoom / pan / cut
 ```
 
-This means the current pipeline can already test:
+A mode でできること:
 
-- LoRA-based still image generation.
-- FFmpeg-based MP4 output.
-- Still image to video conversion.
-- Smooth zoom, pan, and cut editing.
-- Simple PV-like shot assembly from generated images.
+- LoRAベースの静止画生成
+- FFmpegベースの動画化
+- ズーム / パン / カットによるPV風編集
+- ショット単位の簡易映像テスト
 
-However, the test showed that A mode alone is not enough for natural character motion, especially face direction changes such as:
+一方で、次のような自然な中割変化は弱いままでした。
 
 ```text
 left angle
   ↓
-intermediate in-between
+intermediate
   ↓
 front angle
 ```
 
-## Finding from the face-turn test
+## 判明した制約
 
-The following methods were tested or discussed:
+- 単純なFFmpeg変形では顔向きや体の向きは変えられない
+- txt2imgの複数枚生成だけでは角度制御が不安定
+- 画像ブレンドでは本当の45度中割にならない
+- img2img だけでは「角度変化」と「同一性維持」を両立しにくい
 
-1. **Single-image transform with FFmpeg**
-   - Good for zoom and pan.
-   - Cannot rotate the character's face or body.
+## 結論
 
-2. **Multiple txt2img keyframes**
-   - Can create different still images.
-   - Angle control is unstable.
-   - File names and actual face direction can mismatch.
-   - Character design may collapse when the prompt strongly requests a side/profile angle.
+自然なキャラクター動作には、prompt だけでなく **structured control data** が必要です。
 
-3. **Blend-based in-between frame**
-   - A 50:50 blend between left and front images did not create a real 45-degree in-between.
-   - It only mixed pixels and often became visually close to the front image.
-
-4. **img2img from a good base image**
-   - Better at preserving character design.
-   - But with low denoise, the face angle barely changes.
-   - With high denoise, the face angle may change, but character design becomes unstable.
-
-## Important limitation discovered
-
-`img2img` alone is not enough to reliably create natural face-turn in-betweens while preserving character design.
-
-```text
-denoise low
-  → character design is preserved
-  → face angle remains almost unchanged
-
-denoise high
-  → face angle may change
-  → character design may collapse
-```
-
-Therefore, natural in-between generation requires stronger control than prompt + img2img.
-
-## Decision: add B-control implementation after the current test phase
-
-After the current image/video test phase, AI Anime Studio should add **B mode**:
+そのため今後の動画生成は、A mode に加えて **B-control** を扱います。
 
 ```text
 B. ControlNet / OpenPose / Reference / IPAdapter / AnimateDiff style control
 ```
 
-The purpose of B mode is to control:
+## B-control が受け持つもの
 
-- Face direction.
-- Body angle.
-- Pose.
-- Character consistency across keyframes.
-- In-between frame generation.
-- Motion continuity.
-- Camera-work consistency.
-- Lighting consistency.
+- face direction
+- body angle
+- pose target
+- motion continuity
+- camera-work consistency
+- lighting consistency
+- reference image based identity preservation
 
-## Why B mode is needed
+## 現在の実装対応
 
-A mode is useful for early video testing:
+この段階では、B-control の**軽量実装**として次を追加しました。
 
-```text
-still image
-  ↓
-zoom / pan / cut
-  ↓
-short video test
-```
+1. `storyboard export-comfyui --b-control`
+   - Shot / Camera / Lighting / Motion cue / Selected Result をもとに
+   - `b_control_manifest.json` を生成
+   - ComfyUI workflow の `meta` と prompt に B-control 情報を差し込む
 
-But B mode is needed for actual anime-like motion:
+2. `manifests/storyboards/<story_id>/b_control_manifest.json`
+   - shotごとの face direction
+   - camera distance / angle
+   - lighting direction
+   - motion intents
+   - reference images
+   - OpenPose / IPAdapter / ControlNet / AnimateDiff 向け hint
 
-```text
-character pose / face angle / reference image
-  ↓
-controlled generation
-  ↓
-consistent keyframes
-  ↓
-in-between frames
-  ↓
-animation shot
-```
+3. `edit_timeline_manifest.json` への参照追加
+   - Timeline側からも B-control manifest をたどれるようにする
 
-## B mode should also help camera-work and lighting
+## 実装上の位置づけ
 
-B mode is not only for character movement.
+いまの B-control は **最終的な ControlNet 実行エンジンそのもの** ではありません。
 
-It should also contribute to camera-work and lighting control.
+先に次を固定するための段階です。
 
-### Camera-work contribution
+- Shotごとの制御情報 schema
+- ComfyUI export 時の metadata 受け渡し
+- motion dataset との接続点
+- 将来の Dashboard / Launcher から扱うための台帳
 
-Possible controls:
-
-- Shot size: close-up, bust-up, upper body, full body.
-- Camera angle: front, side, low angle, high angle, three-quarter view.
-- Camera motion: zoom, pan, dolly, tilt.
-- Character position in frame.
-- Composition consistency between frames.
-
-### Lighting contribution
-
-Possible controls:
-
-- Direction of light.
-- Shadow position.
-- Rim light / backlight.
-- Dramatic anime-style lighting.
-- Consistent lighting across sequential frames.
-- Reuse of lighting tags or LightingManifest data.
-
-## Future implementation image
-
-The future B-control pipeline could look like this:
-
-```text
-CharacterProfile
-  │
-  ├─ character trigger tag
-  ├─ LoRA reference
-  ├─ reference images
-  └─ design constraints
-
-ShotManifest
-  │
-  ├─ camera angle
-  ├─ camera distance
-  ├─ pose target
-  ├─ face direction
-  ├─ lighting direction
-  └─ motion intent
-
-Control Inputs
-  │
-  ├─ OpenPose / pose map
-  ├─ ControlNet guide
-  ├─ IPAdapter / reference image
-  ├─ depth / lineart / canny when needed
-  └─ AnimateDiff or video model when available
-
-ComfyUI Workflow
-  │
-  ▼
-Controlled keyframes / in-betweens
-  │
-  ▼
-VideoManifest / EditTimelineManifest
-```
-
-## Relationship with the current development order
-
-The current development order remains:
-
-1. **WD14 tags auto full implementation**
-2. **Video Analysis Pipeline**
-3. **AI Anime Studio Launcher / Dashboard**
-
-B-control should be added as a future improvement after or alongside the video pipeline work.
-
-Recommended placement:
-
-```text
-1. Complete image tagging and dataset quality improvements.
-2. Build Video Analysis Pipeline.
-3. Record camera, pose, face direction, and lighting information into manifests.
-4. Add B-control workflow generation in ComfyUI.
-5. Connect B-control outputs to VideoManifest / EditTimelineManifest.
-6. Expose it later through AI Anime Studio Launcher / Dashboard.
-```
-
-## Short-term practical direction
-
-For the current test phase, continue with A mode:
-
-- Use successful still images.
-- Add zoom / pan / cuts.
-- Build simple PV-style test videos.
-- Record where motion control fails.
-
-After the test phase, use those findings to define B-control requirements.
-
-## Development note
-
-The current test shows that face-turn animation cannot be solved by prompt engineering alone.
-
-The project should treat this as a system requirement:
-
-```text
-Natural character motion needs structured control data.
-```
-
-This should be reflected in future design for:
+## 関連する manifest
 
 - `ShotManifest`
-- `VideoManifest`
-- `LightingManifest`
-- `GenerationManifest`
-- ComfyUI workflow export
-- AI Anime Studio Dashboard controls
+- `b_control_manifest.json`
+- `phase6_manifest.json`
+- `motion_dataset_manifest.json`
+- `edit_timeline_manifest.json`
+
+## 次の強化候補
+
+- 実ControlNetノードへの直接入力
+- OpenPose guide画像の自動生成
+- face turn transition 専用の中割生成workflow
+- motion dataset と B-control を使った連続生成評価

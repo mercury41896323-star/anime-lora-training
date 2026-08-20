@@ -300,3 +300,21 @@ def build_result_id(
         f"{shot_id}|{stored_path}|{source_reference}|{job_id}|{node_id}".encode("utf-8")
     ).hexdigest()[:10]
     return f"{shot_id}-{digest}"
+
+
+def set_shot_result_decision(
+    settings: AppSettings,
+    story_id: str,
+    result_id: str,
+    decision: str,
+    notes: str = "",
+):
+    from .storyboard_review import set_shot_result_decision as implementation
+
+    return implementation(
+        settings=settings,
+        story_id=story_id,
+        result_id=result_id,
+        decision=decision,
+        notes=notes,
+    )

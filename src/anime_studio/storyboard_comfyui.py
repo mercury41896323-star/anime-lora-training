@@ -6,6 +6,12 @@ from pathlib import Path
 from typing import Any
 import zlib
 
+from .b_control import (
+    apply_b_control_to_workflow,
+    build_b_control_prompt_fragment,
+    export_b_control_manifest,
+    load_b_control_map,
+)
 from .comfyui_queue import DEFAULT_COMFYUI_BASE_URL, enqueue_comfyui_workflow
 from .comfyui_workflow_export import export_comfyui_workflow
 from .lora_registry import project_relative_path, utc_timestamp
@@ -44,6 +50,7 @@ class StoryboardWorkflowExportResult:
     manifest_path: Path
     workflows: list[StoryboardWorkflowItem]
     skipped_shots: list[StoryboardWorkflowSkip]
+    b_control_manifest_path: Path | None = None
 
 
 def export_storyboard_comfyui_workflows(
@@ -55,12 +62,18 @@ def export_storyboard_comfyui_workflows(
     enqueue: bool = False,
     base_url: str = DEFAULT_COMFYUI_BASE_URL,
     queue_path: str | Path | None = None,
+    b_control: bool = False,
 ) -> StoryboardWorkflowExportResult:
     storyboard = load_storyboard(settings, story_id)
     camera_by_shot = load_camera_work_map(settings, story_id)
     lighting_by_shot = load_lighting_setup_map(settings, story_id)
     resolved_output_dir = normalize_output_dir(settings, story_id, output_dir)
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
+    b_control_manifest_path: Path | None = None
+    b_control_by_shot: dict[str, dict[str, Any]] = {}
+    if b_control:
+        b_control_manifest_path = export_b_control_manifest(settings, story_id).manifest_path
+        b_control_by_shot = load_b_control_map(settings, story_id)
 
     workflows: list[StoryboardWorkflowItem] = []
     skipped: list[StoryboardWorkflowSkip] = []
@@ -91,6 +104,12 @@ def export_storyboard_comfyui_workflows(
                 camera_by_shot.get(shot.shot_id),
                 lighting_by_shot.get(shot.shot_id),
             )
+            if b_control:
+                workflow = inject_b_control_context(
+                    workflow=workflow,
+                    shot=shot,
+                    b_control_entry=b_control_by_shot.get(shot.shot_id),
+                )
             workflow_path.write_text(
                 json.dumps(workflow, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
@@ -136,6 +155,12 @@ def export_storyboard_comfyui_workflows(
                 "created_at": utc_timestamp(),
                 "workflow_count": len(workflows),
                 "skipped_count": len(skipped),
+                "generation_mode": "B-control" if b_control else "A-mode",
+                "supplemental_manifests": {
+                    "b_control": project_relative_path(settings, b_control_manifest_path)
+                    if b_control_manifest_path is not None
+                    else ""
+                },
                 "workflows": [asdict(item) for item in workflows],
                 "skipped_shots": [asdict(item) for item in skipped],
             },
@@ -151,6 +176,7 @@ def export_storyboard_comfyui_workflows(
         manifest_path=manifest_path,
         workflows=workflows,
         skipped_shots=skipped,
+        b_control_manifest_path=b_control_manifest_path,
     )
 
 
@@ -219,6 +245,22 @@ def inject_shot_context(
     return workflow
 
 
+def inject_b_control_context(
+    workflow: dict[str, Any],
+    shot: Shot,
+    b_control_entry: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not b_control_entry:
+        return workflow
+    positive_node = find_positive_prompt_node(workflow)
+    if positive_node is not None:
+        inputs = positive_node.setdefault("inputs", {})
+        base_prompt = str(inputs.get("text", ""))
+        b_control_prompt = build_b_control_prompt_fragment(b_control_entry)
+        inputs["text"] = merge_prompt_parts(base_prompt, b_control_prompt)
+    return apply_b_control_to_workflow(workflow, b_control_entry)
+
+
 def build_shot_prompt(
     base_prompt: str,
     shot: Shot,
@@ -236,6 +278,15 @@ def build_shot_prompt(
 def build_shot_negative_prompt(base_prompt: str, shot: Shot) -> str:
     parts = [base_prompt.strip(), shot.negative_prompt.strip()]
     return ", ".join(part for part in parts if part)
+
+
+def merge_prompt_parts(*parts: str) -> str:
+    merged: list[str] = []
+    for part in parts:
+        value = str(part).strip()
+        if value and value not in merged:
+            merged.append(value)
+    return ", ".join(merged)
 
 
 def find_positive_prompt_node(workflow: dict[str, Any]) -> dict[str, Any] | None:
