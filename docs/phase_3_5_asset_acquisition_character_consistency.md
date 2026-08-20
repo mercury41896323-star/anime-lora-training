@@ -1,6 +1,6 @@
 # Phase 3.5: Asset Acquisition & Character Consistency
 
-> 状態: **設計確定 / 実装前**
+> 状態: **設計確定 / Step 1 着手**
 >
 > Phase 3 の実機テスト結果を受け、Phase 4 の本格テストへ進む前に、キャラクター素材の取得効率と同一性を改善するための中間フェーズとして追加する。
 
@@ -25,6 +25,25 @@ Phase 3 では、キャラクター画像を学習し、ComfyUIで中割画像�
 **動画・既存画像から効率よく高品質なキャラクター基準資料を作り、外部ツールでの補正を再取り込みし、LoRAと2.5Dの両方で利用できる Character Master Asset を構築する。**
 
 Phase 3.5 は既存Phase 1〜7を破棄するものではない。Phase 3とPhase 4の間に追加し、既存のCharacterProfile、Asset Library、ComfyUI、Storyboard、ShotEditor、Unity Timelineへ接続する。
+
+## 現在の着手範囲
+
+最初の実装は **Step 1: Video Importer** に絞る。
+
+この段階で入れるもの:
+
+- 動画を CharacterProfile 配下の `sources/video/` へ登録する
+- `video_sources.json` を作り、後続の Shot 分割対象を明示する
+- `shot_detection`, `frame_sampling`, `character_sheet` の pending 状態を記録する
+- 既存の Phase 1〜7 CLI を壊さず、Phase 3.5 の入口だけを追加する
+
+この段階ではまだ行わないもの:
+
+- ffprobe による詳細 metadata 抽出
+- Shot Detector / Splitter
+- Frame Sampler
+- Character Sheet Draft Generator
+- reviewed / master 再Import
 
 ---
 
@@ -81,6 +100,19 @@ Character LoRA    Shape / Position Control
 - その他FFmpegで扱える一般的な動画形式
 
 動画そのものを直接1つのLoRA素材として扱うのではなく、Shot・フレーム・Motion・Directionへ分解するためのSource Assetとして保存する。
+
+初期実装済み範囲:
+
+- `src/anime_studio/video_importer.py`
+- `tests/test_video_importer.py`
+- `docs/phase3_5_video_importer.md`
+
+保存先:
+
+```text
+assets/processed/characters/<character_id>/sources/video/
+assets/processed/characters/<character_id>/video_sources.json
+```
 
 ---
 
