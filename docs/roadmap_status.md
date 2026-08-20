@@ -25,7 +25,7 @@ Phase 4〜7 の実装は引き続き保持します。今後は、
 | Phase 1 | 基盤構築 | 完了 | 6GB VRAM前提の最小Python構成、config、inventory CLIを作成済み |
 | Phase 2 | キャラクター管理 | 完了 | CharacterProfile、asset登録、tag、dataset生成の入口を作成済み |
 | Phase 3 | LoRA学習 | ベースライン完了 | Kohya低VRAM設定、LoRA結果登録、manifest、ComfyUI workflow export、短時間学習と動画生成の基準点を確保 |
-| Phase 3.5 | Asset Acquisition & Character Consistency | 着手 | Video Importer から開始。動画読込、Shot分割、Frame Sampler、Character Sheet、外部補正再取込、2.5D基準へ進む |
+| Phase 3.5 | Asset Acquisition & Character Consistency | 着手 | Video Importer と video-to-training smoke を追加。次は Shot 分割、Frame Sampler強化、Character Sheet へ進む |
 | Phase 4 | ショット制作 | 完了寄り | Storyboard、ShotEditor、camera/lighting、draft生成、結果採用管理、Unity selected shots連携を作成済み |
 | Phase 5 | 自動化 | 完了寄り | Shot Suggestion AI、RenderQueue、Asset Library連携、ショット単位生成/管理を作成済み |
 | Phase 6 | 拡張 | 完了寄り | voice、lip-sync、SFX、motion、Unity Timeline仮配置、SFX候補採用、motion clip planまで到達 |
@@ -36,11 +36,17 @@ Phase 4〜7 の実装は引き続き保持します。今後は、
 
 1. `src/anime_studio/video_importer.py`
    - 動画を CharacterProfile 配下の Source Asset として取り込み、`video_sources.json` を書く。
-2. `tests/test_video_importer.py`
+2. `src/anime_studio/video_training_pipeline.py`
+   - 動画登録、フレーム抽出、dataset build、Kohya config、readiness を一本で通す。
+3. `tests/test_video_importer.py`
    - 動画取込と pending pipeline 状態の manifest 生成を確認する。
-3. `docs/phase3_5_video_importer.md`
-   - 最初の使い方と制約を整理する。
-4. `docs/phase_3_5_asset_acquisition_character_consistency.md`
+4. `tests/test_video_training_pipeline.py`
+   - 既存フレーム再利用時の video-to-training smoke を確認する。
+5. `docs/phase3_5_video_importer.md`
+   - 動画入口の使い方と制約を整理する。
+6. `docs/phase3_5_video_to_training.md`
+   - 動画から学習準備までの最小ラインを整理する。
+7. `docs/phase_3_5_asset_acquisition_character_consistency.md`
    - Phase 3.5 の親設計を「実装前」から「Step 1着手」へ更新する。
 
 ## Phase 4〜7で維持していくもの
@@ -70,12 +76,13 @@ Phase 4〜7 の実装は引き続き保持します。今後は、
 
 優先順は次の通りです。
 
-1. `sample_yonagi` の基準動画を Phase 3.5 の Video Importer へ登録する。
-2. 動画から Shot 分割の最小ルールを決める。
-3. 代表フレーム抽出の基準を決める。
-4. Character Sheet Draft Generator の最小テンプレートを定義する。
-5. 外部補正後の reviewed / master 管理方式を固める。
-6. 同じ約2秒動画で Before / After 比較条件を固定する。
+1. `sample_yonagi` の基準動画を `training video-smoke` で通す。
+2. 抽出フレーム数と ready 判定の妥当性を確認する。
+3. 動画から Shot 分割の最小ルールを決める。
+4. 代表フレーム抽出の基準を、類似除外ありへ強化する。
+5. Character Sheet Draft Generator の最小テンプレートを定義する。
+6. 外部補正後の reviewed / master 管理方式を固める。
+7. 同じ約2秒動画で Before / After 比較条件を固定する。
 
 ## 設計方針
 
