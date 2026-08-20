@@ -17,6 +17,7 @@ anime-edit-export = "anime_studio.edit_export:main"
 anime-timeline-revision = "anime_studio.timeline_revision:main"
 anime-training-readiness = "anime_studio.training_readiness:main"
 anime-video-import = "anime_studio.video_importer:main"
+anime-video-training = "anime_studio.video_training_pipeline:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
