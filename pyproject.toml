@@ -20,6 +20,7 @@ anime-video-import = "anime_studio.video_importer:main"
 anime-video-training = "anime_studio.video_training_pipeline:main"
 anime-character-bootstrap = "anime_studio.character_bootstrap:main"
 anime-video-analysis = "anime_studio.video_analysis:main"
+anime-character-sheet-draft = "anime_studio.character_sheet_draft:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
