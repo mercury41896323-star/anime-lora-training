@@ -4,7 +4,7 @@
 >
 > この文書は、実キャラクター生成テストで得られた課題を踏まえて、AI Anime Studio の次期改修方針を整理した設計メモです。
 >
-> 2026年8月20日時点では、Video Importer / Shot Detector / Frame Sampler / Asset Classifier / Character Sheet Draft / reviewed-master 再取込 / 2.5D Definition の**初期実装**が `Phase 3.5` として追加されています。将来改修として残っている中心課題は、Character Sheet Importer 本体、Dataset Builder v2、高精度分類、より強い shot boundary 判定です。
+> 2026年8月20日時点では、Video Importer / Shot Detector / Frame Sampler / Asset Classifier / Character Sheet Draft / reviewed-master 再取込 / 2.5D Definition に加えて、**Character Sheet Importer** と **Dataset Builder v2 の初期実装**が追加されています。将来改修として残っている中心課題は、高精度な Character Sheet region detection、motion dataset、より強い shot boundary 判定、高精度分類です。
 
 ## 背景
 
@@ -136,8 +136,10 @@ Dataset Builder
 
 ## 実装状況
 
-- **未実装**
-- ただし `Character Sheet Draft Generator` と `reviewed / master 再取込` は Phase 3.5 側で先行実装済み
+- **初期実装済み**
+- `src/anime_studio/character_sheet_importer.py`
+- fixed normalized crop region を使う lightweight importer
+- `--template-json` で region を差し替え可能
 
 ---
 
@@ -318,8 +320,10 @@ Asset Classifier
 
 ## 実装状況
 
-- **未実装**
-- 現在は sampled frame dataset と LoRA向け dataset 生成まで
+- **初期実装済み**
+- `src/anime_studio/dataset_builder_v2.py`
+- `character / expression / shot / direction` の4系統を出力
+- `motion` dataset は未実装
 
 ---
 
@@ -478,8 +482,8 @@ Final Video
 
 # 現在の位置づけ
 
-この文書に記載している内容は、**一部がPhase 3.5として初期実装済みで、残りが将来改修として継続中**です。
+この文書に記載している内容は、**一部がPhase 3.5〜その次段として初期実装済みで、残りが将来改修として継続中**です。
 
-現在実装済みの詳細は `docs/phase_3_5_asset_acquisition_character_consistency.md` と `docs/roadmap_status.md` を基準に確認します。
+現在実装済みの詳細は `docs/phase_3_5_asset_acquisition_character_consistency.md`、`docs/phase3_6_character_sheet_importer_and_dataset_builder_v2.md`、`docs/roadmap_status.md` を基準に確認します。
 
 既存のPhase 1〜7を破棄するのではなく、既存のCharacterProfile、Asset Library、Storyboard、Shot Suggestion、ComfyUI、Unity Timeline、FFmpeg exportへ接続する新しい入力・解析パイプラインとして段階的に強化します。
