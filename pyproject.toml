@@ -7,7 +7,7 @@ name = "ai-anime-studio"
 version = "0.1.0"
 description = "Lightweight local prototype tools for AI Anime Studio."
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["Pillow>=10.0.0"]
 
 [project.scripts]
 anime-studio = "anime_studio.cli:main"
@@ -25,6 +25,8 @@ anime-video-shot = "anime_studio.video_shot_pipeline:main"
 anime-character-master = "anime_studio.character_master_asset:main"
 anime-character-2p5d = "anime_studio.character_2p5d_definition:main"
 anime-video-phase35 = "anime_studio.video_phase35_pipeline:main"
+anime-character-sheet-import = "anime_studio.character_sheet_importer:main"
+anime-dataset-builder-v2 = "anime_studio.dataset_builder_v2:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
