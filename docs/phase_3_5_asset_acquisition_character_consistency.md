@@ -1,6 +1,6 @@
 # Phase 3.5: Asset Acquisition & Character Consistency
 
-> 状態: **設計確定 / Step 2 着手**
+> 状態: **初期実装入り / Step 4 付近**
 >
 > Phase 3 の実機テスト結果を受け、Phase 4 の本格テストへ進む前に、キャラクター素材の取得効率と同一性を改善するための中間フェーズとして追加する。
 
@@ -28,7 +28,7 @@ Phase 3.5 は既存Phase 1〜7を破棄するものではない。Phase 3とPhas
 
 ## 現在の着手範囲
 
-現在は **Step 2: Video Analysis の入口** まで進める。
+現在は **Step 4: Shot Detector / Frame Sampler / Character Sheet Draft の初期実装** まで進めている。
 
 この段階で入っているもの:
 
@@ -37,15 +37,21 @@ Phase 3.5 は既存Phase 1〜7を破棄するものではない。Phase 3とPhas
 - `training video-smoke` で動画から学習準備までを一気通しする
 - 動画を入口に CharacterProfile を新規作成または更新する
 - 抽出済みフレームから sequence manifest、learning asset manifest、storyboard draft を作る
+- Shot Detector / Splitter の軽量初期版を入れる
+- 類似フレーム除外つき sampled dataset を作る
+- 顔角度 / 表情 / 全身の heuristic 分類を行う
+- Character Sheet Draft / Completeness を作る
+- reviewed / master sheet の再取込を行う
+- Character Master Asset から 2.5D Definition manifest を作る
+- 60〜300秒動画向けの adaptive fps を入れる
 
-この段階ではまだ行わないもの:
+この段階でまだ弱いもの:
 
-- ffprobe による詳細 metadata 抽出
-- Shot Detector / Splitter
-- 類似フレーム除外
-- Character Sheet Draft Generator
-- reviewed / master 再Import
-- 2.5D定義の自動生成
+- Shot boundary の精度はまだ軽量 rule-based
+- 類似度判定は tag / file-size ベースの簡易版
+- 顔角度 / 表情 / 全身分類は heuristic
+- 2.5D Definition は control manifest であり rig ではない
+- Character Master Asset からの Dataset Builder v2 はまだ未実装
 
 ---
 
@@ -106,38 +112,17 @@ Character LoRA    Shape / Position Control
 - `tests/test_character_bootstrap.py`
 - `anime-character-bootstrap`
 
-役割:
-
-- CharacterProfile を最初に用意する
-- source note や appearance note を残す
-- 動画を Source Asset として紐づける
-
 ---
 
 # 2. Video Importer
 
 動画を学習素材・解析素材としてAI Anime Studioへ登録する。
 
-想定入力:
-
-- mp4
-- mov
-- その他FFmpegで扱える一般的な動画形式
-
-動画そのものを直接1つのLoRA素材として扱うのではなく、Shot・フレーム・Motion・Directionへ分解するためのSource Assetとして保存する。
-
 初期実装済み範囲:
 
 - `src/anime_studio/video_importer.py`
 - `tests/test_video_importer.py`
 - `docs/phase3_5_video_importer.md`
-
-保存先:
-
-```text
-assets/processed/characters/<character_id>/sources/video/
-assets/processed/characters/<character_id>/video_sources.json
-```
 
 ---
 
@@ -153,23 +138,6 @@ assets/processed/characters/<character_id>/video_sources.json
 - `anime-studio training video-smoke`
 - `anime-video-training`
 
-役割:
-
-- Video Importer を起点にする
-- 既存の frame extraction を再利用する
-- 既存の auto tag / dataset / Kohya config / readiness を再利用する
-- Character Sheet や 2.5D に進む前の、動画ベース学習ラインの最小実験を可能にする
-
-このラインはまだ、
-
-- 類似フレーム除外
-- Shot単位代表抽出
-- 顔角度優先抽出
-- 動画単位dataset分離
-- Character Sheet Draft 生成
-
-には対応していない。
-
 ---
 
 # 4. Video Analysis
@@ -183,135 +151,72 @@ assets/processed/characters/<character_id>/video_sources.json
 - `anime-video-analysis`
 - `docs/phase3_5_character_bootstrap_and_video_analysis.md`
 
-この段階の解析は、まだ画像理解AIではない。
-まずは軽量に、
-
-- 一定秒数ごとの sequence bucket
-- 各 sequence の start / middle / end keyframe
-- 一定間隔の sampled learning frame
-- sequence からの storyboard draft
-
-を生成する。
-
-これにより、
-
-```text
-動画
-↓
-フレーム列
-↓
-sequence manifest
-↓
-learning asset candidate
-↓
-storyboard draft
-```
-
-までの流れを確認できる。
-
 ---
 
 # 5. Shot Detector / Splitter
 
 動画をShot単位へ自動分割する。
 
-初期実装は軽量なScene Change Detectionを優先する。
+初期実装済み範囲:
 
-```text
-Video
- ↓
-Shot 001
-Shot 002
-Shot 003
-...
-```
+- `src/anime_studio/video_shot_pipeline.py`
+- `tests/test_video_shot_pipeline.py`
+- `anime-video-shot detect`
 
-既存の動画分割検証で得た知見を活用し、過剰分割やフェードのみのShotを減らす。
+現在は tag 変化と最大長による軽量分割を行う。
 
 ---
 
 # 6. Frame Sampler
 
-各Shotから代表フレームを抽出する。
+各Shotから代表フレームを抽出し、類似寄りのフレームを減らす。
 
-目的は全フレームを学習へ投入することではなく、**情報量の高いフレームを少数選ぶこと**。
+初期実装済み範囲:
 
-候補選択基準:
+- `src/anime_studio/video_shot_pipeline.py`
+- `anime-video-shot sample`
 
-- Shot開始 / 中間 / 終了
-- 顔角度の変化
-- 表情変化
-- ポーズ変化
-- 全身が見えるフレーム
-- ブラーが少ないフレーム
-- 類似度の高い重複フレームを除外
+現在は start / middle / end を優先し、tag 類似度と file size 差を使って軽量に重複を抑える。
 
 ---
 
 # 7. Character Asset Classifier
 
-抽出フレームや既存画像を用途別に分類する。
+抽出フレームを用途別に分類する。
 
-```text
-Extracted Asset
- ↓
-Character Asset Classifier
- ↓
-- Identity
+初期実装済み範囲:
+
+- `src/anime_studio/video_shot_pipeline.py`
+- `anime-video-shot classify`
+
+現在は次を出す。
+
 - Face Angle
 - Expression
-- Full Body
-- Pose
-- Costume
-- Hair
-- Motion Reference
-```
-
-将来的にはMotion / Shot / Direction Dataset Builderとも共有する。
+- Full Body / Upper Body / Portrait
 
 ---
 
 # 8. Character Sheet Draft Generator
 
-分類された代表フレームから、Character Sheet Template v1に沿ったDraftを自動生成する。
+分類や解析結果をもとに Character Sheet Draft を生成する。
 
-主な領域:
+初期実装済み範囲:
 
-- Main Portrait
-- Front
-- Side
-- Back
-- Face Angles
-- Expressions
-- Full Body
-- Pose Reference
-- Costume
-- Hair
-- Color Palette
-- Metadata
-
-動画に存在しない角度や表情を無理に推測して埋めず、Missingとして残す。
+- `src/anime_studio/character_sheet_draft.py`
+- `tests/test_character_sheet_draft.py`
+- `docs/phase3_5_character_sheet_draft.md`
+- `anime-character-sheet-draft`
 
 ---
 
 # 9. Character Sheet Completeness Check
 
-Draft生成後、キャラクター基準資料として何が不足しているかを可視化する。
+Draft生成後、何が不足しているかを可視化する。
 
-例:
+初期実装済み範囲:
 
-```text
-Front        OK
-Left Side    OK
-Right Side   OK
-Back         Missing
-Full Body    OK
-Expressions  7/10
-Costume      OK
-Hair Detail  Needs Review
-```
-
-目的は、不足部分だけを外部AI・追加画像・手動作成で補えるようにすること。
+- `character_sheet/<video_id>_completeness.json`
 
 ---
 
@@ -319,31 +224,29 @@ Hair Detail  Needs Review
 
 Character Sheet Draftは最終正解としない。
 
-動画由来素材には、圧縮、ブラー、作画揺れ、遮蔽、極端な角度などが含まれるため、Gemini等の外部ツールや人間による補正工程を正式なワークフローとして認める。
+この工程自体は人間・外部ツール前提で残す。
 
 ---
 
 # 11. Reviewed Character Sheet Re-Import
 
-外部で補正したCharacter SheetをAI Anime Studioへ再読み込みできるようにする。
+外部で補正したCharacter Sheetを再読み込みできるようにする。
 
-推奨管理:
+初期実装済み範囲:
 
-```text
-character_sheet/
-├─ source/
-│  └─ video_extracted_draft.png
-├─ reviewed/
-│  └─ character_sheet_reviewed_v1.png
-└─ master/
-   └─ character_sheet_master_v1.png
-```
+- `src/anime_studio/character_master_asset.py`
+- `tests/test_character_master_asset.py`
+- `anime-character-master`
 
 ---
 
 # 12. Character Master Asset
 
-採用済みCharacter Sheet、各Crop、metadata、Completeness情報、CharacterProfileとの紐付けを統合した基準Assetを作る。
+採用済みCharacter Sheet、metadata、Completeness情報、CharacterProfileとの紐付けを統合した基準Assetを作る。
+
+初期実装済み範囲:
+
+- `character_master_asset.json`
 
 ---
 
@@ -351,30 +254,42 @@ character_sheet/
 
 Character Master Assetと動画から抽出した高品質フレームを使い、目的別にDatasetを構築する。
 
+現時点ではまだ未実装。
+
 ---
 
 # 14. 2.5D Character Definition
 
-LoRAだけでキャラクターの形状・位置・角度を安定させようとせず、Character Master Assetから2.5D用の基準情報を作る。
+Character Master Assetから2.5D用の基準情報を作る。
 
-役割分担:
+初期実装済み範囲:
 
-```text
-LoRA
-  = 見た目、質感、キャラクターらしさ
+- `src/anime_studio/character_2p5d_definition.py`
+- `anime-character-2p5d`
 
-2.5D
-  = 頭身、顔位置、目鼻位置、体型、髪シルエットなどの形状基準
-
-ControlNet等のControl
-  = ポーズ、構図、向き
-```
+これは現時点では、layer / control hint / view anchor を持つ軽量 control manifest である。
 
 ---
 
-# 15. 再学習・再生成テスト
+# 15. 60〜300秒動画向け解析最適化
 
-Phase 3で作成した約2秒動画をベースラインとして保存し、Phase 3.5改修後に同条件で再生成する。
+初期実装済み範囲:
+
+- `ffprobe` があれば duration を読む
+- `target_max_frames` を超えない `effective_fps` を自動計算する
+- `anime-video-phase35` で end-to-end に実行する
+
+---
+
+# 16. End-to-End Pipeline
+
+現在は Phase 3.5 を一気に通す入口も入っている。
+
+初期実装済み範囲:
+
+- `src/anime_studio/video_phase35_pipeline.py`
+- `docs/phase3_5_video_phase35_pipeline.md`
+- `anime-video-phase35`
 
 ---
 
@@ -388,21 +303,13 @@ Phase 3.5実装中でも、低品質素材やダミー素材を使った機能�
 
 # 推奨実装順
 
-1. Character Bootstrap
-2. Video Importer
-3. Video To Training Smoke
-4. Video Analysis
-5. Shot Detector / Splitter
-6. Frame Sampler
-7. Character Asset Classifier
-8. Character Sheet Draft Generator
-9. Character Sheet Completeness Check
-10. Reviewed Character Sheet Re-Import
-11. Character Master Asset
-12. Dataset Builder v2
-13. 2.5D Character Definition
-14. LoRA再学習
-15. 同条件2秒動画のBefore / After比較
+1. `anime-video-phase35` で 60〜300秒動画を通す
+2. Shot boundary と sampled frame を人間が確認する
+3. reviewed / master sheet を取り込む
+4. `anime-character-2p5d` を生成する
+5. Character Master Asset ベースの Dataset Builder v2 へ進む
+6. LoRA再学習
+7. 同条件2秒動画の Before / After 比較
 
 ---
 
