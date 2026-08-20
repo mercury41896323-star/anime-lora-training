@@ -35,12 +35,15 @@ def build_frame_extraction_plan(
     video_path: str | Path,
     character_id: str,
     fps: float = 1.0,
+    output_group: str | None = None,
 ) -> FrameExtractionPlan:
     source = Path(video_path)
     if fps <= 0:
         raise ValueError("fps must be greater than 0.")
 
     output_dir = settings.assets.processed / "characters" / character_id / "frames"
+    if output_group:
+        output_dir = output_dir / normalize_output_group(output_group)
     return FrameExtractionPlan(
         video_path=source,
         output_dir=output_dir,
@@ -56,3 +59,9 @@ def extract_frames(plan: FrameExtractionPlan) -> int:
     plan.output_dir.mkdir(parents=True, exist_ok=True)
     completed = subprocess.run(plan.command, check=False)
     return completed.returncode
+
+
+def normalize_output_group(value: str) -> str:
+    normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+    filtered = "".join(character for character in normalized if character.isalnum() or character == "_")
+    return filtered or "video"
