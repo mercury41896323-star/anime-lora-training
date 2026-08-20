@@ -38,6 +38,7 @@ from .storyboard_review import set_shot_result_decision, write_storyboard_previe
 from .tagger import finalize_tag_sidecars, generate_auto_tag_records, update_manual_tags
 from .timeline_revision import adopt_timeline_revision, review_timeline_revisions
 from .training_readiness import check_training_readiness, run_training_smoke
+from .video_training_pipeline import run_video_training_smoke
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -599,6 +600,21 @@ def build_parser() -> argparse.ArgumentParser:
     training_smoke.add_argument("--min-images", type=int, default=1, help="Minimum image count for smoke readiness.")
     training_smoke.add_argument("--provider", default="baseline", help="Tag provider for smoke auto tags.")
     training_smoke.add_argument("--output", default=None, help="Optional smoke manifest path.")
+    training_video_smoke = training_subparsers.add_parser(
+        "video-smoke",
+        help="Run video import -> frame extraction -> dataset -> Kohya config -> readiness.",
+    )
+    training_video_smoke.add_argument("--character-id", required=True, help="Character id.")
+    training_video_smoke.add_argument("--video", required=True, help="Source video path.")
+    training_video_smoke.add_argument("--pretrained-model", required=True, help="SD base model path or id for generated config.")
+    training_video_smoke.add_argument("--kohya-root", default=".", help="Kohya/sd-scripts root path.")
+    training_video_smoke.add_argument("--fps", type=float, default=1.0, help="Frames per second to sample from the video.")
+    training_video_smoke.add_argument("--min-images", type=int, default=1, help="Minimum image count for smoke readiness.")
+    training_video_smoke.add_argument("--provider", default="baseline", help="Tag provider for smoke auto tags.")
+    training_video_smoke.add_argument("--source-label", default="", help="Optional short label such as baseline clip.")
+    training_video_smoke.add_argument("--skip-extract", action="store_true", help="Skip ffmpeg frame extraction and reuse existing frames.")
+    training_video_smoke.add_argument("--reuse-import", action="store_true", help="Reuse an already imported video entry instead of failing.")
+    training_video_smoke.add_argument("--output", default=None, help="Optional video smoke manifest path.")
     return parser
 
 
@@ -1116,6 +1132,29 @@ def main(argv: list[str] | None = None) -> int:
             output_path=args.output,
         )
         print(f"Wrote training smoke manifest: {result.manifest_path}")
+        print(f"Dataset: {result.dataset_dir}")
+        print(f"Kohya config: {result.kohya_config_dir}")
+        print(f"Ready: {result.ready}")
+        return 0 if result.ready else 1
+
+    if args.command == "training" and args.training_command == "video-smoke":
+        result = run_video_training_smoke(
+            settings=settings,
+            character_id=args.character_id,
+            video_path=args.video,
+            pretrained_model=args.pretrained_model,
+            kohya_root=args.kohya_root,
+            fps=args.fps,
+            min_images=args.min_images,
+            provider=args.provider,
+            source_label=args.source_label,
+            skip_extract=args.skip_extract,
+            reuse_import=args.reuse_import,
+            output_path=args.output,
+        )
+        print(f"Wrote video training smoke manifest: {result.manifest_path}")
+        print(f"Video id: {result.video_id}")
+        print(f"Frames: {result.frame_output_dir}")
         print(f"Dataset: {result.dataset_dir}")
         print(f"Kohya config: {result.kohya_config_dir}")
         print(f"Ready: {result.ready}")
