@@ -52,11 +52,37 @@ manifest には次を記録します。
 - size bytes
 - `shot_detection`, `frame_sampling`, `character_sheet` の pending 状態
 
+## 再利用
+
+同じ動画で再実行したい場合は `--reuse-existing` を使えます。
+
+```powershell
+anime-video-import --character-id sample_yonagi --source assets/raw/sample_yonagi_scene01.mp4 --source-label "phase3 baseline" --reuse-existing
+```
+
+## この次のライン
+
+Video Importer だけで止めず、そのまま **動画読込から学習準備まで** を通したい場合は `training video-smoke` を使います。
+
+```powershell
+anime-studio training video-smoke `
+  --character-id sample_yonagi `
+  --video assets/raw/sample_yonagi_scene01.mp4 `
+  --pretrained-model C:\models\sd15.safetensors `
+  --kohya-root C:\tools\sd-scripts `
+  --fps 1.0 `
+  --min-images 10 `
+  --source-label "phase3 baseline"
+```
+
+詳しくは `docs/phase3_5_video_to_training.md` を参照してください。
+
 ## 現時点の制約
 
 - FFprobe による duration / fps / codec 取得はまだ未実装
 - Shot 分割はまだ未実装
-- フレーム抽出はまだ既存の `frames` コマンドを手動利用する段階
+- フレーム抽出はまだ一定fpsの単純抽出
+- 類似フレーム除外はまだ未実装
 - Character Sheet Draft 生成はまだ未実装
 
 ## 次の実装候補
@@ -65,3 +91,4 @@ manifest には次を記録します。
 2. 軽量な Shot Detector / Splitter
 3. Shot 単位の代表フレーム抽出
 4. Character Sheet Draft Generator の最小テンプレート
+5. 類似フレーム除外と顔角度優先抽出
