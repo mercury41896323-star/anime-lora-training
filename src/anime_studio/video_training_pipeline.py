@@ -8,7 +8,7 @@ from pathlib import Path
 from .frame_extraction import build_frame_extraction_plan, extract_frames
 from .lora_registry import project_relative_path, utc_timestamp
 from .settings import AppSettings, load_settings
-from .training_readiness import TrainingSmokeResult, run_training_smoke
+from .training_readiness import run_training_smoke
 from .video_importer import import_video_asset
 
 
