@@ -26,6 +26,15 @@ Phase 3.5 の最初の実用ラインとして、**動画読込から LoRA 学�
 - reviewed / master の再Import
 - 2.5D 定義の生成
 
+## 現在の重要な制約
+
+この最小ラインでは、dataset 構築時に **その動画だけ** を厳密に切り出していません。
+現在は、`assets/processed/characters/<character_id>/frames/` と `sources/image/` にある既存画像も含めて Character 単位で集めます。
+
+つまり、`sample_yonagi` にすでに登録済みの画像や別動画のフレームがある場合、それらも今回の smoke workflow に入る可能性があります。
+
+これは意図的な最小実装で、次の段階で **動画単位 / Shot単位の dataset 分離** を追加します。
+
 ## 推奨コマンド
 
 ```powershell
