@@ -36,12 +36,13 @@ Phase 3.5 は既存Phase 1〜7を破棄するものではない。Phase 3とPhas
 - `video_sources.json` を作り、後続の Shot 分割対象を明示する
 - `shot_detection`, `frame_sampling`, `character_sheet` の pending 状態を記録する
 - 既存の Phase 1〜7 CLI を壊さず、Phase 3.5 の入口だけを追加する
+- 動画から学習準備までを一気通しする `training video-smoke` を追加する
 
 この段階ではまだ行わないもの:
 
 - ffprobe による詳細 metadata 抽出
 - Shot Detector / Splitter
-- Frame Sampler
+- 類似フレーム除外
 - Character Sheet Draft Generator
 - reviewed / master 再Import
 
@@ -113,6 +114,35 @@ Character LoRA    Shape / Position Control
 assets/processed/characters/<character_id>/sources/video/
 assets/processed/characters/<character_id>/video_sources.json
 ```
+
+---
+
+## 1.5. Video To Training Smoke
+
+動画から LoRA 学習準備までを一気通しする最小ライン。
+
+初期実装済み範囲:
+
+- `src/anime_studio/video_training_pipeline.py`
+- `tests/test_video_training_pipeline.py`
+- `docs/phase3_5_video_to_training.md`
+- `anime-studio training video-smoke`
+
+役割:
+
+- Video Importer を起点にする
+- 既存の frame extraction を再利用する
+- 既存の auto tag / dataset / Kohya config / readiness を再利用する
+- Character Sheet や 2.5D に進む前の、動画ベース学習ラインの最小実験を可能にする
+
+このラインはまだ、
+
+- 類似フレーム除外
+- Shot単位代表抽出
+- 顔角度優先抽出
+- Character Sheet Draft 生成
+
+には対応していない。
 
 ---
 
@@ -354,17 +384,18 @@ Unity / FFmpeg
 # 推奨実装順
 
 1. Video Importer
-2. Shot Detector / Splitter
-3. Frame Sampler
-4. Character Asset Classifier
-5. Character Sheet Draft Generator
-6. Character Sheet Completeness Check
-7. Reviewed Character Sheet Re-Import
-8. Character Master Asset
-9. Dataset Builder v2
-10. 2.5D Character Definition
-11. LoRA再学習
-12. 同条件2秒動画のBefore / After比較
+2. Video To Training Smoke
+3. Shot Detector / Splitter
+4. Frame Sampler
+5. Character Asset Classifier
+6. Character Sheet Draft Generator
+7. Character Sheet Completeness Check
+8. Reviewed Character Sheet Re-Import
+9. Character Master Asset
+10. Dataset Builder v2
+11. 2.5D Character Definition
+12. LoRA再学習
+13. 同条件2秒動画のBefore / After比較
 
 ---
 
