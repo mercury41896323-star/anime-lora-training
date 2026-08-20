@@ -21,6 +21,10 @@ anime-video-training = "anime_studio.video_training_pipeline:main"
 anime-character-bootstrap = "anime_studio.character_bootstrap:main"
 anime-video-analysis = "anime_studio.video_analysis:main"
 anime-character-sheet-draft = "anime_studio.character_sheet_draft:main"
+anime-video-shot = "anime_studio.video_shot_pipeline:main"
+anime-character-master = "anime_studio.character_master_asset:main"
+anime-character-2p5d = "anime_studio.character_2p5d_definition:main"
+anime-video-phase35 = "anime_studio.video_phase35_pipeline:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
