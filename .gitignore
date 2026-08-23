@@ -12,6 +12,7 @@ assets/processed/*
 datasets/
 models/
 outputs/
+manifests/
 *.safetensors
 *.ckpt
 *.pt

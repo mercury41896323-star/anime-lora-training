@@ -37,12 +37,15 @@ RTX 3050 6GB VRAM環境を前提にした軽量な制作パイプラインとし
 - Character Master Assetから実画像anchor付き2.5D Definition生成
 - 2.5D DefinitionのComfyUI B-control / 動画制御への自動注入
 - CharacterProfile登録画像からの動画なし2.5D Definition生成
+- Character SheetからCrop、12パーツMask、Depth、Pose、透明PNG、簡易Meshを生成するSimple 2.5D Rig Pipeline
+- LoRA + OpenPose ControlNet + Depth ControlNet用ComfyUI workflowとLive2D bridge生成
 - character / motion / camera / background / lighting領域別dataset保存
 - readyな2.5D Definition完成後だけ補完用LoRA設定を生成する学習ゲート
 - motion / camera / background / lighting用CPU軽量trainerとB-control連携
 
 動画からCharacter Master、2.5D制御までの手順は `docs/video_character_consistency_pipeline.md` を参照してください。
 新しい学習設計は `docs/2p5d_first_learning_architecture.md` を参照してください。
+Simple 2.5D Rigの作成手順は `docs/simple_2p5d_rig_pipeline.md` を参照してください。
 専用trainerの使い方は `docs/domain_trainers.md`、ニューラル学習providerは `docs/neural_trainers.md` を参照してください。
 
 ## まず動かすもの

@@ -55,6 +55,9 @@ class CharacterProfileTest(unittest.TestCase):
             self.assertEqual(profile["character_id"], "sample_hero")
             self.assertEqual(profile["display_name"], "Sample Hero")
             self.assertEqual(profile["trigger_tags"], ["sample_hero"])
+            self.assertEqual(profile["profile_template"], "character_profile_v1")
+            self.assertTrue(profile["profile_data"]["training"]["require_2p5d_before_lora"])
+            self.assertIn("ParamAngleX", profile["profile_data"]["rigging"]["parameters"])
 
 
 if __name__ == "__main__":

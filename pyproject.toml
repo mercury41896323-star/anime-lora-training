@@ -32,6 +32,7 @@ anime-neural-trainer = "anime_studio.neural_trainers:main"
 anime-compact-neural-trainer = "anime_studio.compact_neural_trainer:main"
 anime-character-sheet-import = "anime_studio.character_sheet_importer:main"
 anime-dataset-builder-v2 = "anime_studio.dataset_builder_v2:main"
+anime-simple-2p5d = "anime_studio.simple_2p5d_rig:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

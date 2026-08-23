@@ -11,6 +11,88 @@ from .settings import AppSettings
 CHARACTER_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{1,62}$")
 
 
+def default_character_profile_data() -> dict[str, object]:
+    return {
+        "identity": {
+            "aliases": [],
+            "age": "",
+            "birthday": "",
+            "height_cm": None,
+            "body_type": "",
+            "personality": [],
+            "role": "",
+        },
+        "visual_identity": {
+            "face_shape": "",
+            "skin_tone": "",
+            "eye_shape": "",
+            "eye_colors": [],
+            "hair_style": "",
+            "hair_colors": [],
+            "distinctive_features": [],
+            "silhouette_notes": "",
+            "do_not_change": [],
+        },
+        "wardrobe": {
+            "default_outfit": [],
+            "variations": [],
+            "accessories": [],
+            "footwear": [],
+            "forbidden_changes": [],
+        },
+        "reference_coverage": {
+            "turnaround_views": ["front", "side", "back"],
+            "face_angles": ["front", "three_quarter", "side", "up", "down", "back"],
+            "expressions": [
+                "neutral", "smile", "confident", "surprised", "embarrassed", "angry",
+                "anxious", "sad", "lonely", "confused", "serious", "shadow",
+            ],
+            "poses": ["standing", "walk", "turn", "sit", "stretch"],
+            "lighting": ["daylight", "spotlight", "sunset_backlight", "indoor", "night"],
+        },
+        "palette": {
+            "hair": [],
+            "eyes": [],
+            "skin": [],
+            "clothing": [],
+            "accents": [],
+        },
+        "rigging": {
+            "template": "simple_2p5d_rig_v1",
+            "parts": [
+                "hair_back", "head", "face", "hair_front", "eyes", "mouth",
+                "torso", "left_arm", "right_arm", "hips", "left_leg", "right_leg",
+            ],
+            "parameters": [
+                "ParamAngleX", "ParamAngleY", "ParamAngleZ", "ParamBodyAngleX",
+                "ParamEyeLOpen", "ParamEyeROpen", "ParamMouthOpenY", "ParamBreath",
+            ],
+            "manual_review_required": True,
+        },
+        "training": {
+            "identity_trigger": "",
+            "caption_prefix": [],
+            "negative_tags": [],
+            "minimum_images": 20,
+            "recommended_images": 40,
+            "require_2p5d_before_lora": True,
+            "dataset_requirements": [
+                "text_free", "character_cropped", "reviewed_identity", "view_balanced",
+                "expression_balanced", "background_variation",
+            ],
+            "source_rights_confirmed": False,
+        },
+        "generation": {
+            "base_model_family": "sd15",
+            "identity_priority": ["2p5d_controls", "character_lora", "prompt"],
+            "controlnet": ["openpose", "depth"],
+            "default_lora_strength": 0.7,
+            "default_pose_strength": 0.8,
+            "default_depth_strength": 0.55,
+        },
+    }
+
+
 @dataclass(frozen=True)
 class LoraArtifact:
     artifact_id: str
@@ -43,6 +125,11 @@ class CharacterProfile:
     definition_2p5d: str = ""
     learning_strategy: str = "2p5d_base_lora_completion"
     domain_models: dict[str, str] = field(default_factory=dict)
+    profile_schema_version: int = 1
+    profile_template: str = "character_profile_v1"
+    profile_data: dict[str, object] = field(default_factory=default_character_profile_data)
+    rig_2p5d: str = ""
+    control_bundle: str = ""
 
 
 def validate_character_id(character_id: str) -> None:
@@ -105,6 +192,11 @@ def load_character_profile(settings: AppSettings, character_id: str) -> Characte
         domain_models={
             str(key): str(value) for key, value in data.get("domain_models", {}).items()
         },
+        profile_schema_version=int(data.get("profile_schema_version", 1)),
+        profile_template=str(data.get("profile_template", "character_profile_v1")),
+        profile_data=dict(data.get("profile_data", default_character_profile_data())),
+        rig_2p5d=str(data.get("rig_2p5d", "")),
+        control_bundle=str(data.get("control_bundle", "")),
     )
 
 
@@ -162,6 +254,23 @@ def link_character_domain_model(
     models = dict(profile.domain_models)
     models[domain] = project_relative_path(settings, model_path)
     return save_character_profile(settings, replace(profile, domain_models=models))
+
+
+def link_character_simple_rig(
+    settings: AppSettings,
+    character_id: str,
+    rig_path: str | Path,
+    control_bundle_path: str | Path,
+) -> Path:
+    profile = load_character_profile(settings, character_id)
+    return save_character_profile(
+        settings,
+        replace(
+            profile,
+            rig_2p5d=project_relative_path(settings, rig_path),
+            control_bundle=project_relative_path(settings, control_bundle_path),
+        ),
+    )
 
 
 def project_relative_path(settings: AppSettings, value: str | Path) -> str:

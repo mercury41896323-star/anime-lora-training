@@ -73,6 +73,45 @@ DEFAULT_TEMPLATE_V1 = (
 )
 
 
+SIMPLE_2P5D_TEMPLATE_V1 = (
+    TemplateRegion("main_portrait", "Main Identity Portrait", 0.205, 0.015, 0.385, 0.410, ["portrait", "front", "identity_anchor"]),
+    TemplateRegion("turnaround_front", "Turnaround Front", 0.390, 0.035, 0.485, 0.410, ["turnaround", "front", "full_body", "rig_anchor"]),
+    TemplateRegion("turnaround_side", "Turnaround Side", 0.485, 0.035, 0.585, 0.410, ["turnaround", "side", "full_body"]),
+    TemplateRegion("turnaround_back", "Turnaround Back", 0.585, 0.035, 0.685, 0.410, ["turnaround", "back_view", "full_body"]),
+    TemplateRegion("face_angle_front", "Face Front", 0.690, 0.055, 0.790, 0.235, ["face_angle", "front", "portrait"]),
+    TemplateRegion("face_angle_45", "Face 45 Degrees", 0.790, 0.055, 0.895, 0.235, ["face_angle", "three_quarter", "45_degree", "portrait"]),
+    TemplateRegion("face_angle_side", "Face Side", 0.895, 0.055, 1.000, 0.235, ["face_angle", "side", "portrait"]),
+    TemplateRegion("face_angle_up", "Face Looking Up", 0.690, 0.235, 0.790, 0.410, ["face_angle", "up", "portrait"]),
+    TemplateRegion("face_angle_down", "Face Looking Down", 0.790, 0.235, 0.895, 0.410, ["face_angle", "down", "portrait"]),
+    TemplateRegion("face_angle_back", "Head Back", 0.895, 0.235, 1.000, 0.410, ["face_angle", "back_view", "portrait"]),
+    TemplateRegion("expressions", "Expression Strip", 0.000, 0.430, 1.000, 0.605, ["expression_sheet"]),
+    TemplateRegion("expression_neutral", "Neutral", 0.000, 0.450, 0.083, 0.605, ["expression", "neutral", "portrait"]),
+    TemplateRegion("expression_smile", "Smile", 0.083, 0.450, 0.166, 0.605, ["expression", "smile", "portrait"]),
+    TemplateRegion("expression_confident", "Confident", 0.166, 0.450, 0.249, 0.605, ["expression", "confident", "portrait"]),
+    TemplateRegion("expression_surprised", "Surprised", 0.249, 0.450, 0.332, 0.605, ["expression", "surprised", "portrait"]),
+    TemplateRegion("expression_embarrassed", "Embarrassed", 0.332, 0.450, 0.415, 0.605, ["expression", "embarrassed", "portrait"]),
+    TemplateRegion("expression_angry", "Angry", 0.415, 0.450, 0.498, 0.605, ["expression", "angry", "portrait"]),
+    TemplateRegion("expression_anxious", "Anxious", 0.498, 0.450, 0.581, 0.605, ["expression", "anxious", "portrait"]),
+    TemplateRegion("expression_sad", "Sad", 0.581, 0.450, 0.664, 0.605, ["expression", "sad", "portrait"]),
+    TemplateRegion("expression_lonely", "Lonely", 0.664, 0.450, 0.747, 0.605, ["expression", "lonely", "portrait"]),
+    TemplateRegion("expression_confused", "Confused", 0.747, 0.450, 0.830, 0.605, ["expression", "confused", "portrait"]),
+    TemplateRegion("expression_serious", "Serious", 0.830, 0.450, 0.915, 0.605, ["expression", "serious", "portrait"]),
+    TemplateRegion("expression_shadow", "Shadow", 0.915, 0.450, 1.000, 0.605, ["expression", "shadow", "portrait"]),
+    TemplateRegion("pose_reference", "Pose Strip", 0.000, 0.630, 0.470, 0.845, ["pose", "full_body"]),
+    TemplateRegion("pose_standing", "Standing", 0.000, 0.650, 0.090, 0.845, ["pose", "standing", "full_body"]),
+    TemplateRegion("pose_walk", "Walk", 0.090, 0.650, 0.185, 0.845, ["pose", "walk", "full_body"]),
+    TemplateRegion("pose_turn", "Turn", 0.185, 0.650, 0.280, 0.845, ["pose", "turn", "full_body"]),
+    TemplateRegion("pose_sit", "Sit", 0.280, 0.650, 0.375, 0.845, ["pose", "sit", "full_body"]),
+    TemplateRegion("pose_stretch", "Stretch", 0.375, 0.650, 0.470, 0.845, ["pose", "stretch", "full_body"]),
+    TemplateRegion("wardrobe_uniform", "Uniform", 0.480, 0.650, 0.580, 0.845, ["wardrobe", "uniform", "full_body"]),
+    TemplateRegion("wardrobe_training", "Training Wear", 0.580, 0.650, 0.680, 0.845, ["wardrobe", "training_wear", "full_body"]),
+    TemplateRegion("wardrobe_offday", "Off Day", 0.680, 0.650, 0.770, 0.845, ["wardrobe", "casual", "full_body"]),
+    TemplateRegion("color_palette", "Color Palette", 0.770, 0.630, 1.000, 0.845, ["color_palette"]),
+    TemplateRegion("location_reference", "Location Reference", 0.000, 0.865, 0.510, 1.000, ["location_reference", "background"]),
+    TemplateRegion("lighting_reference", "Lighting Reference", 0.510, 0.865, 1.000, 1.000, ["lighting_reference"]),
+)
+
+
 def import_character_sheet(
     settings: AppSettings,
     character_id: str,
@@ -203,6 +242,8 @@ def load_template_regions(template: str, template_json: str | Path | None) -> li
             )
             for item in values
         ]
+    if template == "simple_2p5d_v1":
+        return list(SIMPLE_2P5D_TEMPLATE_V1)
     if template != "v1":
         raise ValueError(f"Unsupported character sheet template: {template}")
     return list(DEFAULT_TEMPLATE_V1)

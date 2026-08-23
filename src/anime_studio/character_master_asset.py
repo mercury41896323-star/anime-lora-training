@@ -33,6 +33,8 @@ def import_character_master_asset(
     master_image: str | Path | None = None,
     notes: str = "",
     import_sections: bool = True,
+    template: str = "v1",
+    template_json: str | Path | None = None,
 ) -> CharacterMasterAssetResult:
     validate_character_id(character_id)
     draft_manifest = settings.project_root / "manifests" / "characters" / character_id / "character_sheet" / f"{video_id}_draft.json"
@@ -49,6 +51,8 @@ def import_character_master_asset(
             character_id=character_id,
             source_image=definition_source_path,
             source_label=f"{video_id}_master",
+            template=template,
+            template_json=template_json,
             allow_create_profile=False,
         )
     completeness = load_optional_json(completeness_manifest)
@@ -64,6 +68,7 @@ def import_character_master_asset(
                 "generated_at": utc_timestamp(),
                 "character_id": character_id,
                 "video_id": video_id,
+                "template": template,
                 "paths": {
                     "draft_manifest": optional_relative_path(settings, draft_manifest),
                     "completeness_manifest": optional_relative_path(settings, completeness_manifest),
@@ -173,6 +178,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--master-image", default=None, help="Optional master character sheet image.")
     parser.add_argument("--notes", default="", help="Optional import notes.")
     parser.add_argument("--no-section-import", action="store_true", help="Do not split the master sheet into template regions.")
+    parser.add_argument("--template", default="v1", help="Character sheet crop template id.")
+    parser.add_argument("--template-json", default=None, help="Optional custom crop template JSON.")
     return parser
 
 
@@ -188,6 +195,8 @@ def main(argv: list[str] | None = None) -> int:
         master_image=args.master_image,
         notes=args.notes,
         import_sections=not args.no_section_import,
+        template=args.template,
+        template_json=args.template_json,
     )
     print(f"Master asset manifest: {result.manifest_path}")
     if result.reviewed_asset_path is not None:

@@ -1,0 +1,71 @@
+{
+  "profile_schema_version": 1,
+  "profile_template": "character_profile_v1",
+  "profile_data": {
+    "identity": {
+      "aliases": [],
+      "age": "",
+      "birthday": "",
+      "height_cm": null,
+      "body_type": "",
+      "personality": [],
+      "role": ""
+    },
+    "visual_identity": {
+      "face_shape": "",
+      "skin_tone": "",
+      "eye_shape": "",
+      "eye_colors": [],
+      "hair_style": "",
+      "hair_colors": [],
+      "distinctive_features": [],
+      "silhouette_notes": "",
+      "do_not_change": []
+    },
+    "wardrobe": {
+      "default_outfit": [],
+      "variations": [],
+      "accessories": [],
+      "footwear": [],
+      "forbidden_changes": []
+    },
+    "reference_coverage": {
+      "turnaround_views": ["front", "side", "back"],
+      "face_angles": ["front", "three_quarter", "side", "up", "down", "back"],
+      "expressions": ["neutral", "smile", "confident", "surprised", "embarrassed", "angry", "anxious", "sad", "lonely", "confused", "serious", "shadow"],
+      "poses": ["standing", "walk", "turn", "sit", "stretch"],
+      "lighting": ["daylight", "spotlight", "sunset_backlight", "indoor", "night"]
+    },
+    "palette": {
+      "hair": [],
+      "eyes": [],
+      "skin": [],
+      "clothing": [],
+      "accents": []
+    },
+    "rigging": {
+      "template": "simple_2p5d_rig_v1",
+      "parts": ["hair_back", "head", "face", "hair_front", "eyes", "mouth", "torso", "left_arm", "right_arm", "hips", "left_leg", "right_leg"],
+      "parameters": ["ParamAngleX", "ParamAngleY", "ParamAngleZ", "ParamBodyAngleX", "ParamEyeLOpen", "ParamEyeROpen", "ParamMouthOpenY", "ParamBreath"],
+      "manual_review_required": true
+    },
+    "training": {
+      "identity_trigger": "",
+      "caption_prefix": [],
+      "negative_tags": [],
+      "minimum_images": 20,
+      "recommended_images": 40,
+      "require_2p5d_before_lora": true,
+      "dataset_requirements": ["text_free", "character_cropped", "reviewed_identity", "view_balanced", "expression_balanced", "background_variation"],
+      "source_rights_confirmed": false
+    },
+    "generation": {
+      "base_model_family": "sd15",
+      "identity_priority": ["2p5d_controls", "character_lora", "prompt"],
+      "controlnet": ["openpose", "depth"],
+      "default_lora_strength": 0.7,
+      "default_pose_strength": 0.8,
+      "default_depth_strength": 0.55
+    }
+  }
+}

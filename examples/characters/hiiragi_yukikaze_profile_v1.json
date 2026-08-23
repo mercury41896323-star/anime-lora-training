@@ -1,0 +1,42 @@
+{
+  "identity": {
+    "aliases": ["ひいらぎ ゆきかぜ"],
+    "age": "16",
+    "birthday": "02-14",
+    "height_cm": 158,
+    "body_type": "slim athletic",
+    "personality": ["cool", "calm", "highly competitive", "strong sense of justice", "pure"],
+    "role": "act-age actor character design"
+  },
+  "visual_identity": {
+    "face_shape": "slim oval anime face",
+    "skin_tone": "light warm",
+    "eye_shape": "large sharp anime eyes",
+    "eye_colors": ["orange", "amber"],
+    "hair_style": "smoky gray-brown hair, long side bangs, low braided bun, single ahoge",
+    "hair_colors": ["smoky gray", "ash brown"],
+    "distinctive_features": ["orange eyes", "single ahoge", "braided low bun", "long face-framing bangs"],
+    "silhouette_notes": "slim athletic teenage girl with compact tied hair silhouette",
+    "do_not_change": ["orange eye color", "braided low bun", "single ahoge", "slim athletic proportions"]
+  },
+  "wardrobe": {
+    "default_outfit": ["smoky black short sleeve t-shirt", "black slim pants"],
+    "variations": ["black athletic jacket", "off-white hoodie"],
+    "accessories": [],
+    "footwear": ["black sneakers with white sole"],
+    "forbidden_changes": ["ornate fantasy costume", "bright saturated default clothing"]
+  },
+  "palette": {
+    "hair": ["#b4a182", "#c5b28f", "#9d8b6f"],
+    "eyes": ["#8b4505", "#c07208", "#e4a13a"],
+    "skin": ["#f1d1bd"],
+    "clothing": ["#161a17", "#4e4e4c", "#80807e"],
+    "accents": ["#ef8757"]
+  },
+  "training": {
+    "identity_trigger": "hiiragi_yukikaze",
+    "caption_prefix": ["1girl", "anime style", "hiiragi_yukikaze"],
+    "negative_tags": ["different eye color", "loose long hair", "twin tails", "ornate accessories"],
+    "source_rights_confirmed": false
+  }
+}
