@@ -4,7 +4,7 @@
 
 ## 目的
 
-RTX 3050 6GB環境でまず検証できるように、現在の`baseline` providerはCPUだけで動く統計prior trainerです。重いニューラル学習を開始する前に、datasetの不足、タグの偏り、Shot間の連続性を確認できます。
+RTX 3050 6GB環境でまず検証できるように、`baseline` providerはCPUだけで動く統計prior trainerです。重いニューラル学習を開始する前に、datasetの不足、タグの偏り、Shot間の連続性を確認できます。ニューラル版は`anime-neural-trainer`で別ジョブとして準備します。
 
 ## 一括学習
 
@@ -30,28 +30,28 @@ anime-domain-trainer train --character-id your_character --video-id your_video_i
 - 顔向き、表情、body framingの遷移回数を学習
 - 平均フレーム遷移時間を保存
 - 2.5D keyframe間の動きとLoRA in-between補完に利用
-- 将来はAnimateDiff Motion LoRA / temporal adapter providerへ差し替え
+- 公式AnimateDiff学習ジョブproviderへ接続済み
 
 ### Camera Trainer
 
 - close-up、medium、full-body等の距離分布を学習
 - 顔向きとShot境界傾向を保存
 - Storyboard / B-controlのカメラ候補に利用
-- 将来はcamera classifier / trajectory adapterへ差し替え
+- 小型PyTorch camera trajectory adapterを実装済み
 
 ### Background Trainer
 
 - 背景タグの頻度と推奨タグを学習
 - 人物segmentationが必要な割合を保存
 - 背景候補とscene styleのpriorとして利用
-- 将来はsegmentation後のBackground LoRA / layout adapterへ差し替え
+- 人物除去済み画像を入力にするKohya Background LoRA jobを実装済み
 
 ### Lighting Trainer
 
 - light、shadow、rim、night、warm/cool等の分布を学習
 - Shot単位のlighting profileを保存
 - Shot間のライティング連続性に利用
-- 将来はLighting LoRA / relighting adapterへ差し替え
+- 画像の色統計とlighting tagを学習する軽量Relighting providerを実装済み
 
 ## 保存先
 
@@ -74,4 +74,8 @@ models/domain/<character_id>/<video_id>/
 - baseline providerは実行可能なCPU軽量trainer
 - datasetが空の場合は`needs_data` modelを生成して学習不足を可視化
 - B-control / ComfyUI workflowへのmodel参照を実装
-- ニューラルweight学習はprovider contractまで定義済みで、今後個別に実装
+- Camera / Relightingはrepo内の小型PyTorch trainerでweight学習可能
+- Background LoRAはKohya sd-scripts用の実行設定を生成可能
+- AnimateDiffは公式trainer用dataset/configを生成するが、6GB VRAMでは安全停止する
+
+詳細は`docs/neural_trainers.md`を参照してください。

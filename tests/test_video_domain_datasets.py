@@ -32,7 +32,7 @@ class VideoDomainDatasetTest(unittest.TestCase):
             )
             self.assertEqual(summaries["character"].entry_count, 3)
             self.assertEqual(summaries["motion"].entry_count, 2)
-            self.assertFalse(summaries["motion"].model_training_implemented)
+            self.assertTrue(summaries["motion"].model_training_implemented)
             for summary in summaries.values():
                 self.assertTrue((root / summary.manifest_path).exists())
 

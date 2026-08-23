@@ -1,0 +1,5 @@
+# Install the CUDA build of PyTorch that matches the local NVIDIA driver first.
+torch>=2.6,<3
+safetensors>=0.4,<1
+accelerate>=1.0,<2
+bitsandbytes>=0.45,<1

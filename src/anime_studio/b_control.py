@@ -245,7 +245,11 @@ def load_learned_domain_models(
             "model_path": project_relative_path(settings, path),
             "model_type": str(model.get("model_type", "")),
             "model_kind": str(model.get("model_kind", "")),
+            "provider": str(model.get("provider", "")),
             "status": str(model.get("status", "")),
+            "weights": str(model.get("weights", "")),
+            "runtime_contract": dict(model.get("runtime_contract") or {}),
+            "compatibility": dict(model.get("compatibility") or {}),
             "priors": extract_domain_priors(domain, model),
         }
     return result

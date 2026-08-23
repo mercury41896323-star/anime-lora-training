@@ -84,7 +84,7 @@ def build_video_domain_datasets(
                     "entry_count": len(entries),
                     "entries": project_relative_path(settings, entries_path),
                     "learning_status": "dataset_ready" if entries else "needs_data",
-                    "model_training_implemented": domain == "character",
+                    "model_training_implemented": True,
                     "training_role": domain_training_role(domain),
                     "limitations": domain_limitations(domain),
                 },
@@ -101,7 +101,7 @@ def build_video_domain_datasets(
                 manifest_path=project_relative_path(settings, manifest_path),
                 entry_count=len(entries),
                 learning_status="dataset_ready" if entries else "needs_data",
-                model_training_implemented=domain == "character",
+                model_training_implemented=True,
             )
         )
 
@@ -215,6 +215,7 @@ def build_camera_entries(
                 "entry_id": f"camera_{len(entries) + 1:06d}",
                 "image_path": str(item.get("output_path", "")),
                 "shot_id": str(item.get("shot_id", "")),
+                "timestamp_seconds": float(item.get("timestamp_seconds", 0.0) or 0.0),
                 "camera_distance": camera_distance_from_body_framing(body_framing),
                 "face_angle": str(classification.get("face_angle", "unknown")),
                 "shot_boundary_reason": str(
@@ -253,6 +254,7 @@ def build_lighting_entries(frames: list[dict[str, Any]]) -> list[dict[str, Any]]
                 "entry_id": f"lighting_{len(entries) + 1:06d}",
                 "image_path": str(item.get("output_path", "")),
                 "shot_id": str(item.get("shot_id", "")),
+                "timestamp_seconds": float(item.get("timestamp_seconds", 0.0) or 0.0),
                 "lighting_tags": lighting_tags or ["unknown_lighting"],
                 "training_role": "lighting_direction_color_and_continuity_reference",
             }
@@ -323,11 +325,11 @@ def domain_training_role(domain: str) -> str:
 
 def domain_limitations(domain: str) -> list[str]:
     if domain == "background":
-        return ["Character segmentation is not yet automatic; entries retain the source character."]
+        return ["Background LoRA remains blocked until reviewed segmented_image_path values are supplied."]
     if domain == "motion":
-        return ["Entries are frame transitions; no dedicated motion model is trained by this command."]
+        return ["AnimateDiff job preparation is implemented, but its official training path is not safe on 6GB VRAM."]
     if domain in {"camera", "lighting"}:
-        return ["Labels are lightweight heuristics and require review before dedicated model training."]
+        return ["Compact neural adapters use lightweight heuristic labels and require review before production use."]
     return ["LoRA training is generated only after a ready 2.5D definition exists."]
 
 

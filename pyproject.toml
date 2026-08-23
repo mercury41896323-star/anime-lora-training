@@ -28,6 +28,8 @@ anime-video-phase35 = "anime_studio.video_phase35_pipeline:main"
 anime-video-clean-frames = "anime_studio.video_frame_cleaner:main"
 anime-video-domain-datasets = "anime_studio.video_domain_datasets:main"
 anime-domain-trainer = "anime_studio.domain_trainers:main"
+anime-neural-trainer = "anime_studio.neural_trainers:main"
+anime-compact-neural-trainer = "anime_studio.compact_neural_trainer:main"
 anime-character-sheet-import = "anime_studio.character_sheet_importer:main"
 anime-dataset-builder-v2 = "anime_studio.dataset_builder_v2:main"
 

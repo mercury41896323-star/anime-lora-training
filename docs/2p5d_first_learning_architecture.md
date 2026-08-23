@@ -62,9 +62,9 @@ datasets/video_learning/<character_id>/<video_id>/
 - `background`: 背景候補と背景タグ。現状は人物segment前の候補dataset
 - `lighting`: 光、影、時間帯、色温度などのタグ
 
-現段階で自動学習設定まで生成するのはcharacter LoRAです。motion・camera・background・lightingは学習可能なdataset台帳まで実装し、専用trainer/providerは今後追加します。
+character LoRAに加えて、motion・camera・background・lightingも学習用dataset台帳と専用providerまで実装しています。
 
-現在は4領域ともCPU軽量baseline trainerを追加済みです。各trainerは統計prior modelを生成してCharacterProfileとB-controlへ登録します。ニューラルweight学習は将来providerとして差し替えます。詳細は`docs/domain_trainers.md`を参照してください。
+4領域ともCPU軽量baseline trainerを利用でき、さらにニューラルproviderを追加済みです。Camera / Relightingは小型PyTorch adapter、BackgroundはKohya LoRA、Motionは公式AnimateDiff trainer用ジョブとして準備します。学習済みdescriptorはCharacterProfileとB-controlへ登録できます。詳細は`docs/domain_trainers.md`と`docs/neural_trainers.md`を参照してください。
 
 ## 2.5DとLoRAの役割
 

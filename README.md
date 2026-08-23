@@ -43,7 +43,7 @@ RTX 3050 6GB VRAM環境を前提にした軽量な制作パイプラインとし
 
 動画からCharacter Master、2.5D制御までの手順は `docs/video_character_consistency_pipeline.md` を参照してください。
 新しい学習設計は `docs/2p5d_first_learning_architecture.md` を参照してください。
-専用trainerの使い方は `docs/domain_trainers.md` を参照してください。
+専用trainerの使い方は `docs/domain_trainers.md`、ニューラル学習providerは `docs/neural_trainers.md` を参照してください。
 
 ## まず動かすもの
 

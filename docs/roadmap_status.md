@@ -26,7 +26,7 @@ Phase 4〜7 の実装は引き続き保持します。今後は、
 | Phase 1 | 基盤構築 | 完了 | 6GB VRAM前提の最小Python構成、config、inventory CLIを作成済み |
 | Phase 2 | キャラクター管理 | 完了 | CharacterProfile、asset登録、tag、dataset生成の入口を作成済み |
 | Phase 3 | LoRA学習 | ベースライン完了 | Kohya低VRAM設定、LoRA結果登録、manifest、ComfyUI workflow export、短時間学習と動画生成の基準点を確保 |
-| Phase 3.5 | 2.5D-First Learning Architecture | baseline trainerまで実装 | 動画解析、CharacterProfile/Master由来2.5D、5領域dataset、補完LoRAゲート、motion/camera/background/lighting CPU trainer、B-control連携を追加 |
+| Phase 3.5 | 2.5D-First Learning Architecture | neural provider入口まで実装 | 動画解析、CharacterProfile/Master由来2.5D、5領域dataset、補完LoRAゲート、4領域CPU trainer、AnimateDiff/Background LoRA job、Camera/Relighting adapter、B-control連携を追加 |
 | Phase 3.6 | Character Sheet + Purpose Dataset | 初期実装入り | Character Sheet Importer、Dataset Builder v2 の入口を追加 |
 | Phase 4 | ショット制作 | 完了寄り | Storyboard、ShotEditor、camera/lighting、draft生成、結果採用管理、Unity selected shots連携を作成済み |
 | Phase 5 | 自動化 | 完了寄り | Shot Suggestion AI、RenderQueue、Asset Library連携、ショット単位生成/管理を作成済み |
@@ -88,7 +88,7 @@ Phase 4〜7 の実装は引き続き保持します。今後は、
 3. reviewed / masterまたは外部登録画像から`anime-character-2p5d`を生成する。
 4. `anime-video-domain-datasets`で5領域datasetを確認する。
 5. 2.5D readiness通過後に補完用LoRAを学習する。
-6. baseline結果を確認し、AnimateDiff / Background LoRA / Relighting等のニューラルproviderへ進む。
+6. baseline結果を確認し、ニューラルprovider jobを準備して、readyになったものだけ学習・登録する。
 
 ## 設計方針
 
