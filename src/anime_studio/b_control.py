@@ -102,8 +102,13 @@ def build_b_control_entry(
     motion_cues: list[dict[str, Any]],
 ) -> dict[str, Any]:
     selected_result = dict(selected_shot.get("selected_result") or {})
-    reference_images = build_reference_images(settings, selected_result)
     face_direction = infer_face_direction(shot, camera)
+    character_definition = load_character_definition(settings, shot.character_id)
+    definition_references = select_definition_references(character_definition, face_direction)
+    reference_images = merge_unique(
+        definition_references,
+        build_reference_images(settings, selected_result),
+    )
     motion_intents = [
         {
             "cue_id": str(cue.get("cue_id", "")),
@@ -124,8 +129,17 @@ def build_b_control_entry(
         "character_id": shot.character_id,
         "duration_seconds": shot.duration_seconds,
         "selected_result": selected_result,
+        "character_definition": build_character_definition_binding(
+            settings,
+            shot.character_id,
+            character_definition,
+            face_direction,
+        ),
         "controls": {
-            "enabled": bool(shot.character_id and (reference_images or motion_intents or camera or lighting)),
+            "enabled": bool(
+                shot.character_id
+                and (character_definition or reference_images or motion_intents or camera or lighting)
+            ),
             "mode": "B-control",
             "face_direction": face_direction,
             "camera_distance": infer_camera_distance(shot, camera),
@@ -147,6 +161,7 @@ def build_b_control_entry(
                 "ipadapter": {
                     "enabled": bool(reference_images),
                     "reference_images": reference_images,
+                    "identity_definition": bool(character_definition),
                 },
                 "controlnet": {
                     "enabled": bool(preprocessors),
@@ -155,6 +170,11 @@ def build_b_control_entry(
                 "animatediff": {
                     "enabled": bool(motion_intents),
                     "motion_bucket": infer_motion_bucket(motion_intents),
+                    "character_definition": character_definition.get("generation_binding", {}).get(
+                        "video_control", {}
+                    )
+                    if character_definition
+                    else {},
                 },
             },
         },
@@ -183,6 +203,84 @@ def build_reference_images(settings: AppSettings, selected_result: dict[str, Any
         if normalized not in result:
             result.append(normalized)
     return result
+
+
+def load_character_definition(settings: AppSettings, character_id: str) -> dict[str, Any]:
+    if not character_id:
+        return {}
+    path = (
+        settings.project_root
+        / "manifests"
+        / "characters"
+        / character_id
+        / "character_2p5d_definition.json"
+    )
+    if not path.is_file():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def select_definition_references(definition: dict[str, Any], face_direction: str) -> list[str]:
+    if not definition:
+        return []
+    result: list[str] = []
+    for anchor in definition.get("view_anchors", []):
+        if str(anchor.get("view", "")) == face_direction:
+            append_unique(result, str(anchor.get("reference_image", "")))
+    for value in definition.get("identity_reference_images", []):
+        append_unique(result, str(value))
+    return result
+
+
+def build_character_definition_binding(
+    settings: AppSettings,
+    character_id: str,
+    definition: dict[str, Any],
+    face_direction: str,
+) -> dict[str, Any]:
+    if not definition:
+        return {}
+    path = (
+        settings.project_root
+        / "manifests"
+        / "characters"
+        / character_id
+        / "character_2p5d_definition.json"
+    )
+    selected_anchor = next(
+        (
+            dict(anchor)
+            for anchor in definition.get("view_anchors", [])
+            if str(anchor.get("view", "")) == face_direction
+        ),
+        {},
+    )
+    return {
+        "manifest_path": project_relative_path(settings, path),
+        "definition_status": str(definition.get("definition_status", "")),
+        "source_master_asset": str(definition.get("source_master_asset", "")),
+        "selected_view_anchor": selected_anchor,
+        "identity_reference_images": [
+            str(value) for value in definition.get("identity_reference_images", [])
+        ],
+        "expression_controls": list(definition.get("expression_controls", [])),
+        "body_controls": list(definition.get("body_controls", [])),
+        "generation_binding": dict(definition.get("generation_binding", {})),
+    }
+
+
+def merge_unique(*groups: list[str]) -> list[str]:
+    result: list[str] = []
+    for group in groups:
+        for value in group:
+            append_unique(result, value)
+    return result
+
+
+def append_unique(values: list[str], value: str) -> None:
+    normalized = value.strip().replace("\\", "/")
+    if normalized and normalized not in values:
+        values.append(normalized)
 
 
 def infer_face_direction(shot: Shot, camera: CameraWork | None) -> str:
@@ -276,6 +374,7 @@ def infer_motion_bucket(motion_intents: list[dict[str, Any]]) -> str:
 
 def build_b_control_prompt_fragment(entry: dict[str, Any]) -> str:
     controls = dict(entry.get("controls") or {})
+    character_definition = dict(entry.get("character_definition") or {})
     motion_intents = list(controls.get("motion_intents") or [])
     motion_labels = ", ".join(str(item.get("motion", "")) for item in motion_intents if item.get("motion"))
     parts = [
@@ -285,6 +384,10 @@ def build_b_control_prompt_fragment(entry: dict[str, Any]) -> str:
         f"camera angle {controls.get('camera_angle', '')}",
         f"lighting {controls.get('lighting_direction', '')}",
         "character consistency",
+        "2.5D character master identity" if character_definition else "",
+        "view anchor " + str(character_definition.get("selected_view_anchor", {}).get("view", ""))
+        if character_definition.get("selected_view_anchor")
+        else "",
         "in-between continuity" if motion_intents else "",
         motion_labels,
     ]
@@ -298,13 +401,18 @@ def build_b_control_prompt_fragment(entry: dict[str, Any]) -> str:
 
 def apply_b_control_to_workflow(workflow: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
     controls = dict(entry.get("controls") or {})
+    character_definition = dict(entry.get("character_definition") or {})
     meta = workflow.setdefault("meta", {})
     meta["generation_mode"] = "B-control"
     meta["b_control"] = entry
     meta["b_control_reference_images"] = list(controls.get("reference_images") or [])
     meta["b_control_preprocessors"] = list(((controls.get("control_inputs") or {}).get("controlnet") or {}).get("preprocessors") or [])
+    meta["character_2p5d_definition"] = character_definition
     workflow.setdefault("extra", {})
     workflow["extra"]["b_control_hint"] = build_b_control_prompt_fragment(entry)
+    workflow["extra"]["character_definition_manifest"] = str(
+        character_definition.get("manifest_path", "")
+    )
 
     for node in iter_comfyui_nodes(workflow):
         inputs = node.setdefault("inputs", {})
@@ -382,4 +490,3 @@ def iter_comfyui_nodes(value: Any):
     elif isinstance(value, list):
         for item in value:
             yield from iter_comfyui_nodes(item)
-

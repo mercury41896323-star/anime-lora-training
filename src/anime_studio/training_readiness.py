@@ -41,6 +41,8 @@ def check_training_readiness(
     character_id: str,
     min_images: int = DEFAULT_MIN_IMAGES,
     output_path: str | Path | None = None,
+    dataset_dir: str | Path | None = None,
+    require_2p5d: bool = False,
 ) -> TrainingReadinessResult:
     validate_character_id(character_id)
     issues: list[dict[str, str]] = []
@@ -52,11 +54,15 @@ def check_training_readiness(
     else:
         issues.append(issue("missing_profile", f"CharacterProfile is missing: {profile_path}"))
 
-    image_paths = collect_character_images(settings, character_id)
+    resolved_dataset_dir = resolve_readiness_dataset_dir(settings, character_id, dataset_dir)
+    if dataset_dir not in (None, ""):
+        image_paths = collect_dataset_images(resolved_dataset_dir / "images")
+    else:
+        image_paths = collect_character_images(settings, character_id)
     if len(image_paths) < min_images:
         issues.append(issue("not_enough_images", f"Need at least {min_images} images, found {len(image_paths)}."))
 
-    tag_records = [tag_record_path(path) for path in image_paths]
+    tag_records = [tag_record_path(path) for path in image_paths] if dataset_dir in (None, "") else []
     missing_tag_records = [path for path in tag_records if not path.exists()]
     caption_paths = [path.with_suffix(".txt") for path in image_paths]
     missing_captions = [path for path in caption_paths if not path.exists()]
@@ -68,13 +74,28 @@ def check_training_readiness(
     if empty_captions:
         issues.append(issue("empty_captions", f"{len(empty_captions)} captions are empty."))
 
-    dataset_dir = settings.datasets.lora / character_id
-    dataset_metadata = dataset_dir / "metadata.json"
-    dataset_images = list((dataset_dir / "images").glob("*")) if (dataset_dir / "images").exists() else []
+    dataset_metadata = resolved_dataset_dir / "metadata.json"
+    dataset_images = list((resolved_dataset_dir / "images").glob("*")) if (resolved_dataset_dir / "images").exists() else []
     if not dataset_metadata.exists():
         warnings.append(issue("missing_dataset_metadata", f"Dataset metadata is missing: {dataset_metadata}"))
     if image_paths and not dataset_images:
-        warnings.append(issue("missing_dataset_images", f"Dataset images are not built yet: {dataset_dir / 'images'}"))
+        warnings.append(issue("missing_dataset_images", f"Dataset images are not built yet: {resolved_dataset_dir / 'images'}"))
+
+    definition_path = (
+        settings.project_root
+        / "manifests"
+        / "characters"
+        / character_id
+        / "character_2p5d_definition.json"
+    )
+    definition = json.loads(definition_path.read_text(encoding="utf-8")) if definition_path.is_file() else {}
+    if require_2p5d and str(definition.get("definition_status", "")) != "ready":
+        issues.append(
+            issue(
+                "missing_ready_2p5d_definition",
+                f"A ready 2.5D definition is required before LoRA training: {definition_path}",
+            )
+        )
 
     kohya_dir = settings.project_root / "config" / "kohya" / character_id
     required_kohya = [kohya_dir / "dataset.toml", kohya_dir / "train_low_vram.toml", kohya_dir / "run_train.ps1"]
@@ -102,9 +123,11 @@ def check_training_readiness(
                 },
                 "paths": {
                     "profile": project_relative_path(settings, profile_path),
-                    "dataset_dir": project_relative_path(settings, dataset_dir),
+                    "dataset_dir": project_relative_path(settings, resolved_dataset_dir),
                     "kohya_config_dir": project_relative_path(settings, kohya_dir),
+                    "character_2p5d_definition": project_relative_path(settings, definition_path),
                 },
+                "learning_strategy": "2p5d_base_lora_completion",
                 "trigger_tags": profile.trigger_tags if profile else [],
                 "issues": issues,
                 "warnings": warnings,
@@ -127,11 +150,14 @@ def run_training_smoke(
     min_images: int = 1,
     provider: str = "baseline",
     output_path: str | Path | None = None,
+    dataset_dir: str | Path | None = None,
+    require_2p5d: bool = False,
 ) -> TrainingSmokeResult:
     validate_character_id(character_id)
     generate_auto_tag_records(settings=settings, character_id=character_id, provider=provider, overwrite=False)
     finalize_tag_sidecars(settings=settings, character_id=character_id, overwrite=True)
-    dataset = build_lora_dataset(settings=settings, character_id=character_id)
+    dataset = build_lora_dataset(settings=settings, character_id=character_id) if dataset_dir in (None, "") else None
+    resolved_dataset_dir = resolve_readiness_dataset_dir(settings, character_id, dataset_dir)
     kohya = generate_kohya_low_vram_config(
         settings=settings,
         character_id=character_id,
@@ -139,8 +165,16 @@ def run_training_smoke(
             pretrained_model_name_or_path=pretrained_model,
             kohya_root=kohya_root,
         ),
+        dataset_dir=resolved_dataset_dir,
+        require_2p5d=require_2p5d,
     )
-    readiness = check_training_readiness(settings=settings, character_id=character_id, min_images=min_images)
+    readiness = check_training_readiness(
+        settings=settings,
+        character_id=character_id,
+        min_images=min_images,
+        dataset_dir=resolved_dataset_dir,
+        require_2p5d=require_2p5d,
+    )
     manifest_path = normalize_smoke_path(settings, character_id, output_path)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
@@ -159,7 +193,7 @@ def run_training_smoke(
                     "readiness_check",
                 ],
                 "outputs": {
-                    "dataset_dir": project_relative_path(settings, dataset.dataset_dir),
+                    "dataset_dir": project_relative_path(settings, resolved_dataset_dir),
                     "kohya_config_dir": project_relative_path(settings, kohya.config_dir),
                     "run_script": project_relative_path(settings, kohya.run_script),
                     "readiness": project_relative_path(settings, readiness.manifest_path),
@@ -172,7 +206,7 @@ def run_training_smoke(
         + "\n",
         encoding="utf-8",
     )
-    return TrainingSmokeResult(manifest_path, readiness.manifest_path, dataset.dataset_dir, kohya.config_dir, readiness.ready)
+    return TrainingSmokeResult(manifest_path, readiness.manifest_path, resolved_dataset_dir, kohya.config_dir, readiness.ready)
 
 
 def issue(code: str, message: str) -> dict[str, str]:
@@ -194,9 +228,33 @@ def next_actions(issues: list[dict[str, str]], warnings: list[dict[str, str]]) -
         actions.append("Build the LoRA dataset.")
     if "missing_kohya_config" in codes:
         actions.append("Generate Kohya low-VRAM config files.")
+    if "missing_ready_2p5d_definition" in codes:
+        actions.append("Create or review the Character Master Asset, then generate a ready 2.5D definition before LoRA training.")
     if not actions:
         actions.append("Ready for a small local LoRA training run.")
     return actions
+
+
+def resolve_readiness_dataset_dir(
+    settings: AppSettings,
+    character_id: str,
+    value: str | Path | None,
+) -> Path:
+    if value in (None, ""):
+        return settings.datasets.lora / character_id
+    path = Path(str(value))
+    if path.is_absolute():
+        return path
+    return settings.project_root / path
+
+
+def collect_dataset_images(images_dir: Path) -> list[Path]:
+    if not images_dir.is_dir():
+        return []
+    extensions = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+    return sorted(
+        path for path in images_dir.iterdir() if path.is_file() and path.suffix.lower() in extensions
+    )
 
 
 def normalize_readiness_path(settings: AppSettings, character_id: str, output_path: str | Path | None) -> Path:

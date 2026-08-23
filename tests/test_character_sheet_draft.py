@@ -71,6 +71,9 @@ class CharacterSheetDraftTest(unittest.TestCase):
             self.assertEqual(draft_result.section_count, 8)
             self.assertGreaterEqual(draft_result.ready_sections, 1)
             self.assertIn("main_portrait", completeness["statuses"])
+            self.assertTrue(draft_result.draft_sheet_path.exists())
+            self.assertTrue(draft_result.review_manifest_path.exists())
+            self.assertEqual(draft["candidate_source"], "video_analysis")
 
 
 def write_settings(root: Path):

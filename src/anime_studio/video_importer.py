@@ -7,7 +7,7 @@ from pathlib import Path
 import shutil
 from typing import Any
 
-from .character_profile import character_profile_path, validate_character_id
+from .character_profile import character_profile_path, link_character_source_asset, validate_character_id
 from .settings import AppSettings, load_settings
 
 
@@ -62,6 +62,7 @@ def import_video_asset(
         if not allow_existing:
             raise FileExistsError(f"Imported video already exists: {destination}")
         if existing_asset is not None:
+            link_character_source_asset(settings, character_id, existing_asset.stored_path)
             return VideoImportResult(asset=existing_asset, manifest_path=manifest_path)
         asset = build_imported_video_asset(
             character_id=character_id,
@@ -70,6 +71,7 @@ def import_video_asset(
             source_label=source_label,
         )
         manifest_path = append_video_manifest(settings, character_id, asset)
+        link_character_source_asset(settings, character_id, asset.stored_path)
         return VideoImportResult(asset=asset, manifest_path=manifest_path)
 
     shutil.copy2(source, destination)
@@ -80,6 +82,7 @@ def import_video_asset(
         source_label=source_label,
     )
     manifest_path = append_video_manifest(settings, character_id, asset)
+    link_character_source_asset(settings, character_id, asset.stored_path)
     return VideoImportResult(asset=asset, manifest_path=manifest_path)
 
 

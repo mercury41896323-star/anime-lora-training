@@ -25,6 +25,9 @@ class ShotResult:
     prompt_id: str = ""
     node_id: str = ""
     linked_at: str = ""
+    decision: str = "candidate"
+    decision_notes: str = ""
+    decided_at: str = ""
     metadata: dict[str, Any] | None = None
 
 
@@ -207,6 +210,9 @@ def build_shot_result(
         prompt_id=prompt_id,
         node_id=node_id,
         linked_at=utc_timestamp(),
+        decision="candidate",
+        decision_notes="",
+        decided_at="",
         metadata=metadata or {},
     )
 
@@ -253,6 +259,9 @@ def shot_result_from_dict(data: dict[str, Any]) -> ShotResult:
         prompt_id=str(data.get("prompt_id", "")),
         node_id=str(data.get("node_id", "")),
         linked_at=str(data.get("linked_at", "")),
+        decision=str(data.get("decision", "candidate")),
+        decision_notes=str(data.get("decision_notes", "")),
+        decided_at=str(data.get("decided_at", "")),
         metadata=dict(data.get("metadata") or {}),
     )
 

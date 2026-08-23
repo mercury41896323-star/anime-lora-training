@@ -68,6 +68,32 @@ class KohyaConfigTest(unittest.TestCase):
             self.assertEqual(artifact.trigger_tags, ["sample_hero"])
             self.assertEqual(artifact.metadata["dataset_image_count"], 1)
 
+    def test_uses_clean_video_dataset_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            settings = write_settings(root)
+            create_character_profile(settings, "clean_hero", "Clean Hero", trigger_tags=["clean_hero"])
+            clean_dataset = root / "datasets" / "lora" / "clean_hero" / "video_scene01_clean"
+            images_dir = clean_dataset / "images"
+            images_dir.mkdir(parents=True)
+            (images_dir / "frame_001.png").write_bytes(b"image")
+            (images_dir / "frame_001.txt").write_text("clean_hero, front\n", encoding="utf-8")
+
+            result = generate_kohya_low_vram_config(
+                settings=settings,
+                character_id="clean_hero",
+                kohya_settings=KohyaLowVramSettings(
+                    pretrained_model_name_or_path="models/sd15.safetensors",
+                ),
+                dataset_dir=clean_dataset,
+            )
+
+            dataset_toml = result.dataset_config.read_text(encoding="utf-8")
+            training_toml = result.training_config.read_text(encoding="utf-8")
+            self.assertEqual(result.dataset_image_count, 1)
+            self.assertIn(str(images_dir), dataset_toml)
+            self.assertIn(str(clean_dataset), training_toml)
+
 
 def write_settings(root: Path):
     config_dir = root / "config"

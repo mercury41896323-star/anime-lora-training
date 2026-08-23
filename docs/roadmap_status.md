@@ -26,7 +26,7 @@ Phase 4〜7 の実装は引き続き保持します。今後は、
 | Phase 1 | 基盤構築 | 完了 | 6GB VRAM前提の最小Python構成、config、inventory CLIを作成済み |
 | Phase 2 | キャラクター管理 | 完了 | CharacterProfile、asset登録、tag、dataset生成の入口を作成済み |
 | Phase 3 | LoRA学習 | ベースライン完了 | Kohya低VRAM設定、LoRA結果登録、manifest、ComfyUI workflow export、短時間学習と動画生成の基準点を確保 |
-| Phase 3.5 | Asset Acquisition & Character Consistency | 実装拡張中 | Video Importer、video-to-training smoke、Character Bootstrap、video learning analysis、Shot Detector、dedup sampler、分類、character sheet draft、reviewed/master import、2.5D definition を追加 |
+| Phase 3.5 | 2.5D-First Learning Architecture | 実装・ローカル検証可能 | 動画解析、実体Character Sheet、CharacterProfile/Master由来2.5D、5領域dataset、2.5D完了後の補完LoRAゲート、B-control連携を追加 |
 | Phase 3.6 | Character Sheet + Purpose Dataset | 初期実装入り | Character Sheet Importer、Dataset Builder v2 の入口を追加 |
 | Phase 4 | ショット制作 | 完了寄り | Storyboard、ShotEditor、camera/lighting、draft生成、結果採用管理、Unity selected shots連携を作成済み |
 | Phase 5 | 自動化 | 完了寄り | Shot Suggestion AI、RenderQueue、Asset Library連携、ショット単位生成/管理を作成済み |
@@ -51,24 +51,30 @@ Phase 4〜7 の実装は引き続き保持します。今後は、
 7. `src/anime_studio/character_master_asset.py`
    - reviewed / master sheet を再取込し、Character Master Asset manifest を作る。
 8. `src/anime_studio/character_2p5d_definition.py`
-   - Character Master Asset から軽量 2.5D Definition manifest を作る。
-9. `src/anime_studio/video_phase35_pipeline.py`
+   - CharacterProfile外部画像またはCharacter Master Assetから実画像anchor付き2.5D Definitionを作る。
+9. `src/anime_studio/video_frame_cleaner.py`
+   - 字幕safe-area Crop、文字系タグ除外、512px化でclean frame datasetを作る。
+10. `src/anime_studio/b_control.py`
+   - 2.5D DefinitionをComfyUI生成と動画制御のidentity/view anchorへ渡す。
+11. `src/anime_studio/video_domain_datasets.py`
+   - character、motion、camera、background、lightingの領域別dataset bundleを保存する。
+12. `src/anime_studio/video_phase35_pipeline.py`
    - 60〜300秒動画向けの end-to-end Phase 3.5 パイプラインをまとめて実行する。
-10. `src/anime_studio/character_sheet_importer.py`
+13. `src/anime_studio/character_sheet_importer.py`
    - 1枚の設定シートを fixed template crop し、section asset と tag sidecar を生成する。
-11. `src/anime_studio/dataset_builder_v2.py`
+14. `src/anime_studio/dataset_builder_v2.py`
    - imported sheet、master asset、classified frame から用途別 dataset を出力する。
-12. `tests/test_video_shot_pipeline.py`
+15. `tests/test_video_shot_pipeline.py`
    - Shot分割、sampled frame、分類の流れを確認する。
-13. `tests/test_character_master_asset.py`
+16. `tests/test_character_master_asset.py`
    - reviewed/master import と 2.5D definition 生成を確認する。
-14. `tests/test_character_sheet_importer.py`
+17. `tests/test_character_sheet_importer.py`
    - character sheet import の crop / tag / manifest を確認する。
-15. `tests/test_dataset_builder_v2.py`
+18. `tests/test_dataset_builder_v2.py`
    - purpose-specific dataset 生成を確認する。
-16. `docs/phase3_5_video_phase35_pipeline.md`
+19. `docs/phase3_5_video_phase35_pipeline.md`
    - end-to-end パイプラインの使い方と制約を整理する。
-17. `docs/phase3_6_character_sheet_importer_and_dataset_builder_v2.md`
+20. `docs/phase3_6_character_sheet_importer_and_dataset_builder_v2.md`
    - Character Sheet Importer と Dataset Builder v2 の使い方を整理する。
 
 ## 直近の推奨タスク
@@ -76,11 +82,11 @@ Phase 4〜7 の実装は引き続き保持します。今後は、
 優先順は次の通りです。
 
 1. 60〜300秒動画で `anime-video-phase35` を実行する。
-2. `anime-character-sheet-import` で設定シートを取り込む。
-3. reviewed / master sheet を実際に取り込み、`anime-character-2p5d` を生成する。
-4. `anime-dataset-builder-v2` で purpose-specific dataset を作る。
-5. sampled dataset / purpose dataset / 従来 dataset の学習結果を比較する。
-6. `motion` dataset と高精度 sheet region detection へ進む。
+2. Character Sheet Draftを確認し、reviewed / masterを作る。
+3. reviewed / masterまたは外部登録画像から`anime-character-2p5d`を生成する。
+4. `anime-video-domain-datasets`で5領域datasetを確認する。
+5. 2.5D readiness通過後に補完用LoRAを学習する。
+6. motion / camera / background / lighting専用trainerへ進む。
 
 ## 設計方針
 

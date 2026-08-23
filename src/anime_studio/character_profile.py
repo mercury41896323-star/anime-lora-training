@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 import json
 import re
 from pathlib import Path
@@ -39,6 +39,9 @@ class CharacterProfile:
     source_notes: str = ""
     lora_files: list[str] = field(default_factory=list)
     lora_artifacts: list[LoraArtifact] = field(default_factory=list)
+    source_assets: list[str] = field(default_factory=list)
+    definition_2p5d: str = ""
+    learning_strategy: str = "2p5d_base_lora_completion"
 
 
 def validate_character_id(character_id: str) -> None:
@@ -93,6 +96,11 @@ def load_character_profile(settings: AppSettings, character_id: str) -> Characte
             lora_artifact_from_dict(item)
             for item in data.get("lora_artifacts", [])
         ],
+        source_assets=[str(value) for value in data.get("source_assets", [])],
+        definition_2p5d=str(data.get("definition_2p5d", "")),
+        learning_strategy=str(
+            data.get("learning_strategy", "2p5d_base_lora_completion")
+        ),
     )
 
 
@@ -106,6 +114,48 @@ def save_character_profile(settings: AppSettings, profile: CharacterProfile) -> 
         encoding="utf-8",
     )
     return profile_path
+
+
+def link_character_source_asset(
+    settings: AppSettings,
+    character_id: str,
+    asset_path: str | Path,
+) -> Path:
+    profile = load_character_profile(settings, character_id)
+    normalized = project_relative_path(settings, asset_path)
+    if normalized in profile.source_assets:
+        return character_profile_path(settings, character_id)
+    return save_character_profile(
+        settings,
+        replace(profile, source_assets=[*profile.source_assets, normalized]),
+    )
+
+
+def link_character_2p5d_definition(
+    settings: AppSettings,
+    character_id: str,
+    definition_path: str | Path,
+) -> Path:
+    profile = load_character_profile(settings, character_id)
+    normalized = project_relative_path(settings, definition_path)
+    return save_character_profile(
+        settings,
+        replace(
+            profile,
+            definition_2p5d=normalized,
+            learning_strategy="2p5d_base_lora_completion",
+        ),
+    )
+
+
+def project_relative_path(settings: AppSettings, value: str | Path) -> str:
+    path = Path(value)
+    if not path.is_absolute():
+        path = settings.project_root / path
+    try:
+        return path.resolve().relative_to(settings.project_root.resolve()).as_posix()
+    except ValueError:
+        return path.resolve().as_posix()
 
 
 def lora_artifact_from_dict(data: dict[str, object]) -> LoraArtifact:

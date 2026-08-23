@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 from pathlib import Path
 import shutil
 
+from .character_sheet_importer import import_character_sheet
 from .character_profile import load_character_profile, save_character_profile, validate_character_id
 from .lora_registry import project_relative_path, utc_timestamp
 from .settings import AppSettings, load_settings
@@ -21,6 +22,7 @@ class CharacterMasterAssetResult:
     character_id: str
     reviewed_asset_path: Path | None
     master_asset_path: Path | None
+    section_manifest_path: Path | None = None
 
 
 def import_character_master_asset(
@@ -30,6 +32,7 @@ def import_character_master_asset(
     reviewed_image: str | Path | None = None,
     master_image: str | Path | None = None,
     notes: str = "",
+    import_sections: bool = True,
 ) -> CharacterMasterAssetResult:
     validate_character_id(character_id)
     draft_manifest = settings.project_root / "manifests" / "characters" / character_id / "character_sheet" / f"{video_id}_draft.json"
@@ -38,7 +41,18 @@ def import_character_master_asset(
 
     reviewed_asset_path = copy_character_sheet_asset(settings, character_id, reviewed_image, "reviewed")
     master_asset_path = copy_character_sheet_asset(settings, character_id, master_image, "master")
+    definition_source_path = master_asset_path or reviewed_asset_path
+    section_import = None
+    if import_sections and definition_source_path is not None:
+        section_import = import_character_sheet(
+            settings=settings,
+            character_id=character_id,
+            source_image=definition_source_path,
+            source_label=f"{video_id}_master",
+            allow_create_profile=False,
+        )
     completeness = load_optional_json(completeness_manifest)
+    section_manifest = load_optional_json(section_import.manifest_path) if section_import else {}
 
     manifest_path = settings.project_root / "manifests" / "characters" / character_id / "character_sheet" / "character_master_asset.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -56,9 +70,20 @@ def import_character_master_asset(
                     "classification_manifest": optional_relative_path(settings, classification_manifest),
                     "reviewed_image": optional_relative_path(settings, reviewed_asset_path),
                     "master_image": optional_relative_path(settings, master_asset_path),
+                    "definition_source_image": optional_relative_path(settings, definition_source_path),
+                    "section_import_manifest": optional_relative_path(
+                        settings, section_import.manifest_path if section_import else None
+                    ),
                 },
+                "section_assets": section_manifest.get("sections", []),
                 "coverage": completeness.get("statuses", {}),
                 "phase35_ready": bool(completeness.get("phase35_ready", False)),
+                "definition_ready": bool(definition_source_path and section_import),
+                "human_review": {
+                    "reviewed_image_present": reviewed_asset_path is not None,
+                    "master_image_present": master_asset_path is not None,
+                    "requires_human_approval": True,
+                },
                 "notes": [item for item in [notes.strip()] if item],
                 "next_steps": [
                     "Use the master asset as the human-reviewed source of truth.",
@@ -78,6 +103,7 @@ def import_character_master_asset(
         character_id=character_id,
         reviewed_asset_path=reviewed_asset_path,
         master_asset_path=master_asset_path,
+        section_manifest_path=section_import.manifest_path if section_import else None,
     )
 
 
@@ -116,14 +142,9 @@ def attach_master_note_to_profile(
     note = ", ".join(note_parts)
     if note in profile.source_notes:
         return
-    updated_profile = type(profile)(
-        character_id=profile.character_id,
-        display_name=profile.display_name,
-        trigger_tags=profile.trigger_tags,
-        appearance_notes=profile.appearance_notes,
+    updated_profile = replace(
+        profile,
         source_notes=f"{profile.source_notes}\n{note}".strip(),
-        lora_files=profile.lora_files,
-        lora_artifacts=profile.lora_artifacts,
     )
     save_character_profile(settings, updated_profile)
 
@@ -151,6 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reviewed-image", default=None, help="Optional reviewed character sheet image.")
     parser.add_argument("--master-image", default=None, help="Optional master character sheet image.")
     parser.add_argument("--notes", default="", help="Optional import notes.")
+    parser.add_argument("--no-section-import", action="store_true", help="Do not split the master sheet into template regions.")
     return parser
 
 
@@ -165,12 +187,15 @@ def main(argv: list[str] | None = None) -> int:
         reviewed_image=args.reviewed_image,
         master_image=args.master_image,
         notes=args.notes,
+        import_sections=not args.no_section_import,
     )
     print(f"Master asset manifest: {result.manifest_path}")
     if result.reviewed_asset_path is not None:
         print(f"Reviewed asset: {result.reviewed_asset_path}")
     if result.master_asset_path is not None:
         print(f"Master asset: {result.master_asset_path}")
+    if result.section_manifest_path is not None:
+        print(f"Master sections: {result.section_manifest_path}")
     return 0
 
 

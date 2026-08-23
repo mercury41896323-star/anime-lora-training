@@ -6,6 +6,8 @@ import sys
 import tempfile
 import unittest
 
+from PIL import Image
+
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -26,8 +28,8 @@ class CharacterMasterAssetTest(unittest.TestCase):
 
             reviewed = root / "reviewed_sheet.png"
             master = root / "master_sheet.png"
-            reviewed.write_bytes(b"reviewed")
-            master.write_bytes(b"master")
+            Image.new("RGB", (1000, 1000), color=(120, 160, 220)).save(reviewed)
+            Image.new("RGB", (1000, 1000), color=(110, 150, 210)).save(master)
 
             master_result = import_character_master_asset(
                 settings=settings,
@@ -49,8 +51,12 @@ class CharacterMasterAssetTest(unittest.TestCase):
             self.assertEqual(definition_manifest["manifest_type"], "character_2p5d_definition")
             self.assertTrue(master_result.reviewed_asset_path.exists())
             self.assertTrue(master_result.master_asset_path.exists())
+            self.assertTrue(master_result.section_manifest_path.exists())
             self.assertEqual(definition_manifest["video_id"], "scene01")
             self.assertEqual(definition_manifest["view_anchors"][0]["view"], "front")
+            self.assertTrue(definition_manifest["view_anchors"][0]["reference_image"])
+            self.assertTrue(definition_manifest["identity_reference_images"])
+            self.assertTrue(definition_manifest["generation_binding"]["b_control"]["enabled"])
 
 
 def write_phase35_manifests(root: Path) -> None:

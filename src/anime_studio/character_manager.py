@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import shutil
 
-from .character_profile import character_profile_path, validate_character_id
+from .character_profile import character_profile_path, link_character_source_asset, validate_character_id
 from .settings import AppSettings
 
 
@@ -42,6 +42,7 @@ def register_character_asset(
         raise FileExistsError(f"Registered asset already exists: {destination}")
 
     shutil.copy2(source, destination)
+    copy_asset_sidecars(source, destination)
 
     asset = RegisteredAsset(
         original_path=str(source),
@@ -50,7 +51,16 @@ def register_character_asset(
         size_bytes=destination.stat().st_size,
     )
     append_asset_manifest(settings, character_id, asset)
+    link_character_source_asset(settings, character_id, destination)
     return asset
+
+
+def copy_asset_sidecars(source: Path, destination: Path) -> None:
+    for suffix in (".txt", ".tags.json"):
+        source_sidecar = source.with_suffix(suffix)
+        if not source_sidecar.is_file():
+            continue
+        shutil.copy2(source_sidecar, destination.with_suffix(suffix))
 
 
 def classify_asset(settings: AppSettings, path: Path) -> str:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 import json
 from pathlib import Path
 import re
@@ -248,14 +248,9 @@ def attach_import_note_to_profile(settings: AppSettings, character_id: str, shee
     note = f"character sheet imported: {sheet_id}, source={source_path.name}"
     if note in profile.source_notes:
         return
-    updated_profile = type(profile)(
-        character_id=profile.character_id,
-        display_name=profile.display_name,
-        trigger_tags=profile.trigger_tags,
-        appearance_notes=profile.appearance_notes,
+    updated_profile = replace(
+        profile,
         source_notes=f"{profile.source_notes}\n{note}".strip(),
-        lora_files=profile.lora_files,
-        lora_artifacts=profile.lora_artifacts,
     )
     save_character_profile(settings, updated_profile)
 

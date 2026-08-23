@@ -29,6 +29,7 @@ class BControlTest(unittest.TestCase):
             settings = write_settings(root)
             write_template(root)
             create_character_profile(settings, "sample_hero", "Sample Hero", trigger_tags=["sample_hero"])
+            write_character_definition(root)
             register_lora_result(
                 settings=settings,
                 character_id="sample_hero",
@@ -93,7 +94,16 @@ class BControlTest(unittest.TestCase):
             self.assertEqual(b_control_manifest["shots"][0]["controls"]["face_direction"], "three_quarter")
             self.assertEqual(workflow["meta"]["generation_mode"], "B-control")
             self.assertEqual(workflow["meta"]["b_control"]["controls"]["motion_intents"][0]["motion"], "face turn")
+            self.assertEqual(
+                workflow["meta"]["character_2p5d_definition"]["selected_view_anchor"]["view"],
+                "three_quarter",
+            )
+            self.assertEqual(
+                b_control_manifest["shots"][0]["controls"]["reference_images"][0],
+                "assets/processed/characters/sample_hero/character_sheet/source/master/face_angle_45.png",
+            )
             self.assertIn("B-control guided generation", workflow["3"]["inputs"]["text"])
+            self.assertIn("2.5D character master identity", workflow["3"]["inputs"]["text"])
 
 
 def write_template(root: Path) -> None:
@@ -103,6 +113,37 @@ def write_template(root: Path) -> None:
         (ROOT / "templates" / "comfyui" / "sd15_lora_txt2img_512.json").read_text(
             encoding="utf-8"
         ),
+        encoding="utf-8",
+    )
+
+
+def write_character_definition(root: Path) -> None:
+    path = root / "manifests" / "characters" / "sample_hero" / "character_2p5d_definition.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "manifest_type": "character_2p5d_definition",
+                "definition_status": "ready",
+                "source_master_asset": "manifests/characters/sample_hero/character_sheet/character_master_asset.json",
+                "identity_reference_images": [
+                    "assets/processed/characters/sample_hero/character_sheet/source/master/main_portrait.png"
+                ],
+                "view_anchors": [
+                    {
+                        "view": "three_quarter",
+                        "status": "ready",
+                        "reference_image": "assets/processed/characters/sample_hero/character_sheet/source/master/face_angle_45.png",
+                    }
+                ],
+                "expression_controls": [],
+                "body_controls": [],
+                "generation_binding": {
+                    "video_control": {"preserve_across_frames": True}
+                },
+            }
+        )
+        + "\n",
         encoding="utf-8",
     )
 

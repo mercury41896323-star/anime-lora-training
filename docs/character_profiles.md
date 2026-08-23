@@ -2,6 +2,8 @@
 
 Character profiles are small JSON files that keep character identity stable before any LoRA training begins.
 
+In the 2.5D-first architecture, the profile is also the common source registry. `source_assets` stores videos and external images, `definition_2p5d` points to the active 2.5D Definition, and `learning_strategy` is `2p5d_base_lora_completion`.
+
 ## Location
 
 Profiles are written under:

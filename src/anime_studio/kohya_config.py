@@ -27,6 +27,7 @@ class KohyaLowVramSettings:
     optimizer_type: str = "AdamW8bit"
     lr_scheduler: str = "constant"
     seed: int = 42
+    training_role: str = "2p5d_residual_completion"
 
 
 @dataclass(frozen=True)
@@ -45,10 +46,25 @@ def generate_kohya_low_vram_config(
     settings: AppSettings,
     character_id: str,
     kohya_settings: KohyaLowVramSettings,
+    dataset_dir: str | Path | None = None,
+    require_2p5d: bool = False,
+    definition_path: str | Path | None = None,
 ) -> KohyaConfigResult:
     validate_character_id(character_id)
     profile = load_character_profile(settings, character_id)
-    dataset = build_lora_dataset(settings, character_id)
+    resolved_definition_path, definition = load_2p5d_definition(
+        settings,
+        character_id,
+        definition_path or profile.definition_2p5d,
+    )
+    if require_2p5d and str(definition.get("definition_status", "")) != "ready":
+        raise ValueError(
+            "A ready character_2p5d_definition is required before generating final LoRA training config."
+        )
+    dataset = build_lora_dataset(settings, character_id) if dataset_dir in (None, "") else None
+    resolved_dataset_dir = resolve_dataset_dir(settings, dataset_dir) if dataset_dir not in (None, "") else dataset.dataset_dir
+    images_dir = resolved_dataset_dir / "images"
+    dataset_image_count = count_dataset_images(images_dir)
 
     config_dir = settings.project_root / "config" / "kohya" / character_id
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -63,7 +79,7 @@ def generate_kohya_low_vram_config(
 
     dataset_config.write_text(
         render_dataset_toml(
-            image_dir=dataset.dataset_dir / "images",
+            image_dir=images_dir,
             class_tokens=" ".join(profile.trigger_tags),
             repeats=kohya_settings.repeats,
             resolution=kohya_settings.resolution,
@@ -84,8 +100,13 @@ def generate_kohya_low_vram_config(
 
     training_payload = {
         "character_id": character_id,
-        "dataset_image_count": dataset.image_count,
+        "dataset_image_count": dataset_image_count,
+        "dataset_dir": str(resolved_dataset_dir),
         "dataset_config": str(dataset_config),
+        "character_2p5d_definition": str(resolved_definition_path)
+        if resolved_definition_path is not None
+        else "",
+        "learning_strategy": profile.learning_strategy,
         "output_dir": str(output_dir),
         "logging_dir": str(logging_dir),
         "output_name": output_name,
@@ -106,7 +127,7 @@ def generate_kohya_low_vram_config(
         training_config=training_config,
         run_script=run_script,
         output_name=output_name,
-        dataset_image_count=dataset.image_count,
+        dataset_image_count=dataset_image_count,
         trigger_tags=profile.trigger_tags,
     )
 
@@ -117,9 +138,45 @@ def generate_kohya_low_vram_config(
         training_config=training_config,
         run_script=run_script,
         profile_path=registry.profile_path,
-        dataset_image_count=dataset.image_count,
+        dataset_image_count=dataset_image_count,
         command=command,
     )
+
+
+def resolve_dataset_dir(settings: AppSettings, value: str | Path | None) -> Path:
+    path = Path(str(value))
+    if path.is_absolute():
+        return path
+    return settings.project_root / path
+
+
+def load_2p5d_definition(
+    settings: AppSettings,
+    character_id: str,
+    value: str | Path | None,
+) -> tuple[Path | None, dict[str, object]]:
+    if value not in (None, ""):
+        path = Path(str(value))
+        if not path.is_absolute():
+            path = settings.project_root / path
+    else:
+        path = (
+            settings.project_root
+            / "manifests"
+            / "characters"
+            / character_id
+            / "character_2p5d_definition.json"
+        )
+    if not path.is_file():
+        return None, {}
+    return path, json.loads(path.read_text(encoding="utf-8"))
+
+
+def count_dataset_images(images_dir: Path) -> int:
+    if not images_dir.is_dir():
+        raise FileNotFoundError(f"Dataset image directory does not exist: {images_dir}")
+    extensions = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+    return sum(1 for path in images_dir.iterdir() if path.is_file() and path.suffix.lower() in extensions)
 
 
 def render_dataset_toml(
@@ -214,7 +271,10 @@ def render_training_toml(payload: dict[str, object]) -> str:
     scalar_keys = [
         "character_id",
         "dataset_image_count",
+        "dataset_dir",
         "dataset_config",
+        "character_2p5d_definition",
+        "learning_strategy",
         "output_dir",
         "logging_dir",
         "output_name",
