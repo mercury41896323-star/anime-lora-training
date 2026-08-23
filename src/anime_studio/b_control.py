@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .character_profile import load_character_profile
 from .lora_registry import project_relative_path, utc_timestamp
 from .phase6_pipeline import get_motion_cues_path, read_cue_items
 from .settings import AppSettings
@@ -104,6 +105,7 @@ def build_b_control_entry(
     selected_result = dict(selected_shot.get("selected_result") or {})
     face_direction = infer_face_direction(shot, camera)
     character_definition = load_character_definition(settings, shot.character_id)
+    learned_domain_models = load_learned_domain_models(settings, shot.character_id)
     definition_references = select_definition_references(character_definition, face_direction)
     reference_images = merge_unique(
         definition_references,
@@ -135,6 +137,7 @@ def build_b_control_entry(
             character_definition,
             face_direction,
         ),
+        "learned_domain_models": learned_domain_models,
         "controls": {
             "enabled": bool(
                 shot.character_id
@@ -218,6 +221,60 @@ def load_character_definition(settings: AppSettings, character_id: str) -> dict[
     if not path.is_file():
         return {}
     return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def load_learned_domain_models(
+    settings: AppSettings,
+    character_id: str,
+) -> dict[str, dict[str, Any]]:
+    if not character_id:
+        return {}
+    try:
+        profile = load_character_profile(settings, character_id)
+    except FileNotFoundError:
+        return {}
+    result: dict[str, dict[str, Any]] = {}
+    for domain, value in profile.domain_models.items():
+        path = Path(value)
+        if not path.is_absolute():
+            path = settings.project_root / path
+        if not path.is_file():
+            continue
+        model = json.loads(path.read_text(encoding="utf-8-sig"))
+        result[domain] = {
+            "model_path": project_relative_path(settings, path),
+            "model_type": str(model.get("model_type", "")),
+            "model_kind": str(model.get("model_kind", "")),
+            "status": str(model.get("status", "")),
+            "priors": extract_domain_priors(domain, model),
+        }
+    return result
+
+
+def extract_domain_priors(domain: str, model: dict[str, Any]) -> dict[str, Any]:
+    keys = {
+        "motion": [
+            "face_transition_counts",
+            "expression_transition_counts",
+            "body_transition_counts",
+            "average_transition_seconds",
+        ],
+        "camera": [
+            "camera_distance_distribution",
+            "face_angle_distribution",
+            "recommended_camera_distance",
+        ],
+        "background": [
+            "background_tag_distribution",
+            "recommended_background_tags",
+        ],
+        "lighting": [
+            "lighting_tag_distribution",
+            "recommended_lighting_tags",
+            "shot_lighting_profiles",
+        ],
+    }.get(domain, [])
+    return {key: model.get(key) for key in keys if key in model}
 
 
 def select_definition_references(definition: dict[str, Any], face_direction: str) -> list[str]:
@@ -375,6 +432,7 @@ def infer_motion_bucket(motion_intents: list[dict[str, Any]]) -> str:
 def build_b_control_prompt_fragment(entry: dict[str, Any]) -> str:
     controls = dict(entry.get("controls") or {})
     character_definition = dict(entry.get("character_definition") or {})
+    learned_domain_models = dict(entry.get("learned_domain_models") or {})
     motion_intents = list(controls.get("motion_intents") or [])
     motion_labels = ", ".join(str(item.get("motion", "")) for item in motion_intents if item.get("motion"))
     parts = [
@@ -385,6 +443,7 @@ def build_b_control_prompt_fragment(entry: dict[str, Any]) -> str:
         f"lighting {controls.get('lighting_direction', '')}",
         "character consistency",
         "2.5D character master identity" if character_definition else "",
+        build_domain_prior_prompt(learned_domain_models),
         "view anchor " + str(character_definition.get("selected_view_anchor", {}).get("view", ""))
         if character_definition.get("selected_view_anchor")
         else "",
@@ -399,15 +458,37 @@ def build_b_control_prompt_fragment(entry: dict[str, Any]) -> str:
     return ", ".join(seen)
 
 
+def build_domain_prior_prompt(models: dict[str, dict[str, Any]]) -> str:
+    parts: list[str] = []
+    camera = dict(models.get("camera", {}).get("priors") or {})
+    background = dict(models.get("background", {}).get("priors") or {})
+    lighting = dict(models.get("lighting", {}).get("priors") or {})
+    if camera.get("recommended_camera_distance"):
+        parts.append(f"learned camera prior {camera['recommended_camera_distance']}")
+    if background.get("recommended_background_tags"):
+        parts.append(
+            "learned background prior "
+            + " ".join(str(value) for value in background["recommended_background_tags"][:3])
+        )
+    if lighting.get("recommended_lighting_tags"):
+        parts.append(
+            "learned lighting prior "
+            + " ".join(str(value) for value in lighting["recommended_lighting_tags"][:3])
+        )
+    return ", ".join(parts)
+
+
 def apply_b_control_to_workflow(workflow: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
     controls = dict(entry.get("controls") or {})
     character_definition = dict(entry.get("character_definition") or {})
+    learned_domain_models = dict(entry.get("learned_domain_models") or {})
     meta = workflow.setdefault("meta", {})
     meta["generation_mode"] = "B-control"
     meta["b_control"] = entry
     meta["b_control_reference_images"] = list(controls.get("reference_images") or [])
     meta["b_control_preprocessors"] = list(((controls.get("control_inputs") or {}).get("controlnet") or {}).get("preprocessors") or [])
     meta["character_2p5d_definition"] = character_definition
+    meta["learned_domain_models"] = learned_domain_models
     workflow.setdefault("extra", {})
     workflow["extra"]["b_control_hint"] = build_b_control_prompt_fragment(entry)
     workflow["extra"]["character_definition_manifest"] = str(

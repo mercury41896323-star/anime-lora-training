@@ -42,6 +42,7 @@ class CharacterProfile:
     source_assets: list[str] = field(default_factory=list)
     definition_2p5d: str = ""
     learning_strategy: str = "2p5d_base_lora_completion"
+    domain_models: dict[str, str] = field(default_factory=dict)
 
 
 def validate_character_id(character_id: str) -> None:
@@ -101,6 +102,9 @@ def load_character_profile(settings: AppSettings, character_id: str) -> Characte
         learning_strategy=str(
             data.get("learning_strategy", "2p5d_base_lora_completion")
         ),
+        domain_models={
+            str(key): str(value) for key, value in data.get("domain_models", {}).items()
+        },
     )
 
 
@@ -146,6 +150,18 @@ def link_character_2p5d_definition(
             learning_strategy="2p5d_base_lora_completion",
         ),
     )
+
+
+def link_character_domain_model(
+    settings: AppSettings,
+    character_id: str,
+    domain: str,
+    model_path: str | Path,
+) -> Path:
+    profile = load_character_profile(settings, character_id)
+    models = dict(profile.domain_models)
+    models[domain] = project_relative_path(settings, model_path)
+    return save_character_profile(settings, replace(profile, domain_models=models))
 
 
 def project_relative_path(settings: AppSettings, value: str | Path) -> str:

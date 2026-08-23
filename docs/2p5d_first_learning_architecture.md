@@ -64,6 +64,8 @@ datasets/video_learning/<character_id>/<video_id>/
 
 現段階で自動学習設定まで生成するのはcharacter LoRAです。motion・camera・background・lightingは学習可能なdataset台帳まで実装し、専用trainer/providerは今後追加します。
 
+現在は4領域ともCPU軽量baseline trainerを追加済みです。各trainerは統計prior modelを生成してCharacterProfileとB-controlへ登録します。ニューラルweight学習は将来providerとして差し替えます。詳細は`docs/domain_trainers.md`を参照してください。
+
 ## 2.5DとLoRAの役割
 
 | 領域 | 2.5D | LoRA |
