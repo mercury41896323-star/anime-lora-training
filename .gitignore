@@ -13,6 +13,7 @@ datasets/
 models/
 outputs/
 manifests/
+queues/
 *.safetensors
 *.ckpt
 *.pt

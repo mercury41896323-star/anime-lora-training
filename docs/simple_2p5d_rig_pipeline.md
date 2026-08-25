@@ -19,6 +19,8 @@ Character SheetとCharacterProfileを、LoRAだけに依存しない軽量な同
 
 Cropは固定座標の初期値です。異なるシートレイアウトでは`character_sheet_importer`のカスタムJSONを使用し、人間が全Cropを確認します。
 
+正面全身Cropは、そのままControlNetへ引き伸ばしません。前景bboxを抽出して512x768のキャンバスへ中央配置し、頭上約8%と足元の安全余白を確保します。これにより、細長い三面図Cropでも頭部・足先が画面外へ切れにくくなります。
+
 ## Character Profile Template v1
 
 `templates/character_profiles/character_profile_template_v1.json`は次を保存します。
@@ -70,6 +72,8 @@ RTX 3050 6GB環境では、ComfyUI作者が公開しているFP16 safetensors版
 7. 正面全身のbboxからPose補助PNGを作成
 8. LoRA + OpenPose ControlNet + Depth ControlNet workflowを出力
 9. Live2D Cubismへ移すためのArtMesh・parameter対応表を出力
+
+生成workflowは`solo`、`single subject`、`head fully visible`、`feet fully visible`を正条件に含め、複数人物、キャラクターシート、頭部・足先Cropを負条件へ入れます。OpenPoseを1.0、Depthを0.65の初期強度として、全身構図を優先します。
 
 ## 制約
 
@@ -141,3 +145,5 @@ anime-simple-2p5d-manage readiness `
 5. API workflowが存在
 
 状態遷移は`built -> pending_review -> approved -> lora_bound -> generation_ready`です。
+
+2026-08-25のRTX 3050 6GB実機結果は`docs/test_log_2026-08-25_simple_2p5d_local_generation.md`を参照してください。

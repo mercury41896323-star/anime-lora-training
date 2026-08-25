@@ -290,6 +290,7 @@ def generate_rig_assets(
     with Image.open(primary) as source:
         image = source.convert("RGBA")
     silhouette = build_foreground_mask(image.convert("RGB"))
+    image, silhouette = compose_full_body_reference(image, silhouette)
     silhouette_path = masks_dir / "silhouette.png"
     silhouette.save(silhouette_path)
     reference_path = controls_dir / "reference.png"
@@ -330,6 +331,43 @@ def generate_rig_assets(
         "pose": pose_path,
         "parts": part_records,
     }
+
+
+def compose_full_body_reference(
+    image: Image.Image,
+    silhouette: Image.Image,
+    canvas_size: tuple[int, int] = (512, 768),
+    horizontal_occupancy: float = 0.72,
+    vertical_occupancy: float = 0.82,
+    top_margin: float = 0.08,
+) -> tuple[Image.Image, Image.Image]:
+    bounds = silhouette.getbbox()
+    if bounds is None:
+        raise ValueError("Cannot compose a full-body reference from an empty silhouette.")
+
+    canvas_width, canvas_height = canvas_size
+    cropped_image = image.crop(bounds)
+    cropped_mask = silhouette.crop(bounds)
+    scale = min(
+        canvas_width * horizontal_occupancy / cropped_image.width,
+        canvas_height * vertical_occupancy / cropped_image.height,
+    )
+    target_size = (
+        max(1, int(round(cropped_image.width * scale))),
+        max(1, int(round(cropped_image.height * scale))),
+    )
+    resized_image = cropped_image.resize(target_size, Image.Resampling.LANCZOS)
+    resized_mask = cropped_mask.resize(target_size, Image.Resampling.LANCZOS)
+    left = (canvas_width - target_size[0]) // 2
+    top = max(0, int(round(canvas_height * top_margin)))
+    if top + target_size[1] > canvas_height:
+        top = canvas_height - target_size[1]
+
+    composed_image = Image.new("RGBA", canvas_size, (255, 255, 255, 0))
+    composed_mask = Image.new("L", canvas_size, 0)
+    composed_image.paste(resized_image, (left, top), resized_mask)
+    composed_mask.paste(resized_mask, (left, top))
+    return composed_image, composed_mask
 
 
 def build_foreground_mask(image: Image.Image) -> Image.Image:
@@ -686,11 +724,25 @@ def build_comfyui_workflow(
         },
         "3": {
             "class_type": "CLIPTextEncode",
-            "inputs": {"clip": ["2", 1], "text": f"{character_id}, anime character, preserve master identity, 2.5D controlled pose"},
+            "inputs": {
+                "clip": ["2", 1],
+                "text": (
+                    f"{character_id}, anime character, preserve master identity, 2.5D controlled pose, "
+                    "solo, 1girl, single subject, one character only, full body, head fully visible, "
+                    "feet fully visible, centered composition, generous headroom, plain background"
+                ),
+            },
         },
         "4": {
             "class_type": "CLIPTextEncode",
-            "inputs": {"clip": ["2", 1], "text": "low quality, inconsistent face, different character, extra limbs, text, watermark"},
+            "inputs": {
+                "clip": ["2", 1],
+                "text": (
+                    "low quality, inconsistent face, different character, extra limbs, text, watermark, "
+                    "cropped head, cropped feet, out of frame, multiple people, duplicate, clones, lineup, "
+                    "character sheet, turnaround sheet, reference sheet, split screen"
+                ),
+            },
         },
         "5": {"class_type": "LoadImage", "inputs": {"image": input_refs["pose"]}},
         "6": {"class_type": "ControlNetLoader", "inputs": {"control_net_name": openpose_controlnet_name}},
@@ -698,7 +750,7 @@ def build_comfyui_workflow(
             "class_type": "ControlNetApplyAdvanced",
             "inputs": {
                 "positive": ["3", 0], "negative": ["4", 0], "control_net": ["6", 0], "image": ["5", 0],
-                "strength": 0.8, "start_percent": 0.0, "end_percent": 0.85,
+                "strength": 1.0, "start_percent": 0.0, "end_percent": 0.9,
             },
         },
         "8": {"class_type": "LoadImage", "inputs": {"image": input_refs["depth"]}},
@@ -707,7 +759,7 @@ def build_comfyui_workflow(
             "class_type": "ControlNetApplyAdvanced",
             "inputs": {
                 "positive": ["7", 0], "negative": ["7", 1], "control_net": ["9", 0], "image": ["8", 0],
-                "strength": 0.55, "start_percent": 0.0, "end_percent": 0.75,
+                "strength": 0.65, "start_percent": 0.0, "end_percent": 0.8,
             },
         },
         "11": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 768, "batch_size": 1}},
@@ -757,8 +809,8 @@ def build_control_bundle(
         "generation_stack": {
             "checkpoint": checkpoint_name,
             "identity": {"provider": "character_lora", "model": lora_name, "strength": 0.7},
-            "pose": {"provider": "controlnet_openpose", "model": openpose_controlnet_name, "strength": 0.8},
-            "depth": {"provider": "controlnet_depth", "model": depth_controlnet_name, "strength": 0.55},
+            "pose": {"provider": "controlnet_openpose", "model": openpose_controlnet_name, "strength": 1.0},
+            "depth": {"provider": "controlnet_depth", "model": depth_controlnet_name, "strength": 0.65},
             "shape": {"provider": "simple_2p5d_rig", "role": "identity and silhouette anchor"},
         },
         "workflow": project_relative_path(settings, workflow_path),

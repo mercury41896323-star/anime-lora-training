@@ -67,7 +67,7 @@ class Simple2p5DRigTest(unittest.TestCase):
             self.assertTrue(result.primary_reference_path.exists())
             self.assertTrue(result.workflow_ready)
             self.assertTrue((comfyui_input / "anime_studio" / "hiiragi_yukikaze" / "pose.png").exists())
-            self.assertEqual(controls["generation_stack"]["pose"]["strength"], 0.8)
+            self.assertEqual(controls["generation_stack"]["pose"]["strength"], 1.0)
             self.assertTrue(all(controls["readiness"].values()))
             self.assertEqual(workflow["6"]["class_type"], "ControlNetLoader")
             self.assertEqual(len(live2d["art_meshes"]), 12)
@@ -77,6 +77,19 @@ class Simple2p5DRigTest(unittest.TestCase):
 
             with Image.open(root / rig["parts"][0]["transparent_image"]) as part:
                 self.assertEqual(part.mode, "RGBA")
+
+            with Image.open(root / definition["simple_2p5d_rig"]["pose_image"]) as pose:
+                self.assertEqual(pose.size, (512, 768))
+            with Image.open(root / definition["simple_2p5d_rig"]["silhouette_mask"]) as mask:
+                bounds = mask.getbbox()
+                self.assertIsNotNone(bounds)
+                self.assertGreaterEqual(bounds[1], 50)
+                self.assertLessEqual(bounds[3], 720)
+
+            self.assertIn("head fully visible", workflow["3"]["inputs"]["text"])
+            self.assertIn("cropped head", workflow["4"]["inputs"]["text"])
+            self.assertIn("one character only", workflow["3"]["inputs"]["text"])
+            self.assertIn("character sheet", workflow["4"]["inputs"]["text"])
 
 
 def write_settings(root: Path):
