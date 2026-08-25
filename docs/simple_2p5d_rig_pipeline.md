@@ -78,3 +78,66 @@ RTX 3050 6GB環境では、ComfyUI作者が公開しているFP16 safetensors版
 - Meshは四角形2三角のDraftです。Live2D CubismでArtMesh、deformer、pivot、clippingを調整します。
 - workflowはControlNet modelと学習済みLoRAの実ファイル名が揃うまで`needs_models`です。
 - Character Sheet由来の文字・背景参考画像を、そのままキャラクターLoRA datasetへ混入させません。
+
+## Reviewと生成ゲート
+
+自動生成直後のRigは`pending_review`です。ファイルが存在するだけでは本番生成へ進めません。
+
+```powershell
+anime-simple-2p5d-manage inspect --character-id hiiragi_yukikaze
+```
+
+確認対象:
+
+- 35領域Cropの位置とキャラクター同一性
+- 12パーツMaskと透明PNG
+- 前後関係を表すDepth
+- 骨格位置を表すPose
+- 四角Meshのpivotと親子関係
+- Live2D ArtMesh・parameter対応
+
+人間が確認した後だけ承認します。
+
+```powershell
+anime-simple-2p5d-manage approve `
+  --character-id hiiragi_yukikaze `
+  --reviewer "reviewer_name" `
+  --notes "Crop、Mask、Depth、Poseを確認"
+```
+
+承認時はRig・Definition・Master AssetのSHA256署名を保存します。これらが再生成された場合、状態は自動的に`pending_review`へ戻ります。LoRA選択やControlNetファイル名の変更だけではRig承認を失効しません。
+
+## LoRAの明示選択
+
+似たファイル名からLoRAを自動推測しません。対象ファイル、trigger tag、確認者を明示します。
+
+```powershell
+anime-simple-2p5d-manage bind-lora `
+  --character-id hiiragi_yukikaze `
+  --lora-name "sample_hiiragi_lora.safetensors" `
+  --trigger-tag "sample_hiiragi" `
+  --comfyui-lora-dir "C:\Users\pfsgs\AppData\Local\Comfy-Desktop\ComfyUI-Shared\models\loras" `
+  --reviewer "reviewer_name"
+```
+
+この操作は生成workflowへの明示的な紐付けです。そのLoRAが当該CharacterProfileから学習されたと自動認定する処理ではありません。
+
+## 最終Readiness
+
+```powershell
+anime-simple-2p5d-manage readiness `
+  --character-id hiiragi_yukikaze `
+  --comfyui-controlnet-dir "C:\Users\pfsgs\AppData\Local\Comfy-Desktop\ComfyUI-Shared\models\controlnet" `
+  --comfyui-lora-dir "C:\Users\pfsgs\AppData\Local\Comfy-Desktop\ComfyUI-Shared\models\loras" `
+  --comfyui-input-dir "C:\Users\pfsgs\AppData\Local\Comfy-Desktop\ComfyUI-Shared\input"
+```
+
+`Ready: True`の条件:
+
+1. Rig reviewが`approved`
+2. 明示選択したLoRAがComfyUI models内に存在
+3. OpenPose・Depth ControlNetが存在
+4. reference・pose・depth・maskがComfyUI input内に存在
+5. API workflowが存在
+
+状態遷移は`built -> pending_review -> approved -> lora_bound -> generation_ready`です。

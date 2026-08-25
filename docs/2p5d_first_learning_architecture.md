@@ -86,3 +86,15 @@ character LoRAに加えて、motion・camera・background・lightingも学習用
 - caption数と最低画像数を満たす
 
 条件を満たさない場合はLoRA学習を開始せず、Character Sheetまたは外部参照画像の追加へ戻ります。
+
+## 生成ゲート
+
+学習ゲートと生成ゲートは分離します。LoRA学習が完了していても、Simple 2.5D Rigの人間Review、LoRAとtrigger tagの明示選択、ControlNetモデル、ComfyUI入力画像が揃うまで生成workflowをreadyとして扱いません。
+
+- Rig再生成時は既存承認を失効する
+- LoRA名の曖昧一致や自動推測をしない
+- LoRAの学習所有情報と生成用bindingを分離する
+- Local testではrights未確認をwarning、本学習・配布前には確認必須とする
+- Live2D bridgeはArtMesh対応表であり、Cubismのmoc3自動生成とは区別する
+
+詳細な操作は`docs/simple_2p5d_rig_pipeline.md`を参照してください。

@@ -39,6 +39,7 @@ RTX 3050 6GB VRAM環境を前提にした軽量な制作パイプラインとし
 - CharacterProfile登録画像からの動画なし2.5D Definition生成
 - Character SheetからCrop、12パーツMask、Depth、Pose、透明PNG、簡易Meshを生成するSimple 2.5D Rig Pipeline
 - LoRA + OpenPose ControlNet + Depth ControlNet用ComfyUI workflowとLive2D bridge生成
+- Simple 2.5D Rigの検査・人間承認・LoRA明示binding・生成readiness gate
 - character / motion / camera / background / lighting領域別dataset保存
 - readyな2.5D Definition完成後だけ補完用LoRA設定を生成する学習ゲート
 - motion / camera / background / lighting用CPU軽量trainerとB-control連携
