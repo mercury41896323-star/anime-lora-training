@@ -102,6 +102,8 @@ anime-simple-2p5d-manage inspect --character-id hiiragi_yukikaze
 
 人間が確認した後だけ承認します。
 
+自動検査ではSilhouetteが512x768であることと、前景bboxが上下左右それぞれ5%以上の余白を持つことも確認します。頭部・足先・身体がキャンバス端へ接触している場合は承認を停止します。
+
 ```powershell
 anime-simple-2p5d-manage approve `
   --character-id hiiragi_yukikaze `

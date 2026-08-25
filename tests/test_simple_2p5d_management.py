@@ -86,6 +86,31 @@ class Simple2p5DManagementTest(unittest.TestCase):
             self.assertTrue(workflow["3"]["inputs"]["text"].startswith("managed_hero_token,"))
             self.assertEqual(profile.profile_data["generation"]["selected_lora"], "managed_hero.safetensors")
 
+    def test_blocks_approval_when_silhouette_touches_canvas_edges(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            settings = write_settings(root)
+            sheet = write_sheet(root)
+            build_simple_2p5d_rig_pipeline(
+                settings=settings,
+                character_id="unsafe_crop",
+                display_name="Unsafe Crop",
+                sheet_image=sheet,
+            )
+            rig_path = root / "assets" / "processed" / "characters" / "unsafe_crop" / "simple_2p5d_rig" / "simple_2p5d_rig.json"
+            rig = json.loads(rig_path.read_text(encoding="utf-8"))
+            silhouette_path = root / rig["silhouette_mask"]
+            unsafe_mask = Image.new("L", (512, 768), 0)
+            draw = ImageDraw.Draw(unsafe_mask)
+            draw.rectangle((200, 0, 312, 767), fill=255)
+            unsafe_mask.save(silhouette_path)
+
+            inspection = inspect_simple_2p5d_rig(settings, "unsafe_crop")
+            review = json.loads(inspection.manifest_path.read_text(encoding="utf-8"))
+            self.assertIn("unsafe_vertical_crop", {item["code"] for item in review["issues"]})
+            with self.assertRaisesRegex(ValueError, "Cannot approve"):
+                approve_simple_2p5d_rig(settings, "unsafe_crop", reviewer="unit_test")
+
 
 def write_sheet(root: Path) -> Path:
     sheet = root / "managed_sheet.png"

@@ -21,6 +21,8 @@ REQUIRED_PARTS = {
     "hair_back", "head", "face", "eyes", "mouth", "hair_front",
     "torso", "left_arm", "right_arm", "hips", "left_leg", "right_leg",
 }
+CONTROL_IMAGE_SIZE = (512, 768)
+MIN_CONTROL_MARGIN_RATIO = 0.05
 
 
 @dataclass(frozen=True)
@@ -86,7 +88,7 @@ def inspect_simple_2p5d_rig(
     for control in ("pose", "depth"):
         check_image_reference(settings, str(controls.get(control, "")), control, issues)
     check_image_reference(settings, str(rig.get("silhouette_mask", "")), "silhouette", issues)
-    inspect_mask_occupancy(settings, str(rig.get("silhouette_mask", "")), warnings)
+    inspect_mask_layout(settings, str(rig.get("silhouette_mask", "")), issues, warnings)
 
     if not bool(profile.profile_data.get("training", {}).get("source_rights_confirmed", False)):
         warnings.append(issue("source_rights_unconfirmed", "Confirm source rights before training or distribution."))
@@ -336,15 +338,34 @@ def check_image_reference(
         issues.append(issue("missing_image", f"{label}: {path}"))
 
 
-def inspect_mask_occupancy(settings: AppSettings, value: str, warnings: list[dict[str, str]]) -> None:
+def inspect_mask_layout(
+    settings: AppSettings,
+    value: str,
+    issues: list[dict[str, str]],
+    warnings: list[dict[str, str]],
+) -> None:
     path = resolve_project_path(settings, value)
     if not path.is_file():
         return
     with Image.open(path) as image:
         mask = image.convert("L")
+        bounds = mask.getbbox()
         histogram = mask.histogram()
         occupied = sum(histogram[1:])
         ratio = occupied / max(1, mask.width * mask.height)
+    if mask.size != CONTROL_IMAGE_SIZE:
+        issues.append(issue("invalid_control_canvas", f"{mask.width}x{mask.height}; expected 512x768"))
+    if bounds is None:
+        issues.append(issue("empty_silhouette", str(path)))
+        return
+    left_margin = bounds[0] / mask.width
+    top_margin = bounds[1] / mask.height
+    right_margin = (mask.width - bounds[2]) / mask.width
+    bottom_margin = (mask.height - bounds[3]) / mask.height
+    if top_margin < MIN_CONTROL_MARGIN_RATIO or bottom_margin < MIN_CONTROL_MARGIN_RATIO:
+        issues.append(issue("unsafe_vertical_crop", f"top={top_margin:.3f}, bottom={bottom_margin:.3f}"))
+    if left_margin < MIN_CONTROL_MARGIN_RATIO or right_margin < MIN_CONTROL_MARGIN_RATIO:
+        issues.append(issue("unsafe_horizontal_crop", f"left={left_margin:.3f}, right={right_margin:.3f}"))
     if ratio < 0.08 or ratio > 0.92:
         warnings.append(issue("suspicious_mask_occupancy", f"{ratio:.3f}"))
 
