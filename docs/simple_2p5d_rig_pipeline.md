@@ -75,6 +75,8 @@ RTX 3050 6GB環境では、ComfyUI作者が公開しているFP16 safetensors版
 
 生成workflowは`solo`、`single subject`、`head fully visible`、`feet fully visible`を正条件に含め、複数人物、キャラクターシート、頭部・足先Cropを負条件へ入れます。OpenPoseを1.0、Depthを0.65の初期強度として、全身構図を優先します。
 
+外部IP-Adapterがない環境でも同一性を補強するため、正面全身の`reference.png`を標準VAEでlatentへ変換し、denoise 0.65のimg2img初期値として使います。LoRAだけで生成するより、顔、衣装、シルエット、白背景を維持しやすい軽量構成です。
+
 ## 制約
 
 - Maskは背景色差と身体ゾーンによる簡易Draftであり、髪・顔・腕を意味的に分割するAI segmentationではありません。

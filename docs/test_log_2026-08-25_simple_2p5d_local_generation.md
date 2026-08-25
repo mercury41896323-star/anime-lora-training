@@ -34,6 +34,7 @@ Character Sheetから生成したCrop、Mask、Depth、Poseと既存LoRAを使�
 5. 負条件へ複数人物、複製、キャラクターシート、画面外Cropを追加する。
 6. OpenPose強度を1.0、Depth強度を0.65へ調整する。
 7. 512x768と上下左右5%以上の余白を自動承認条件にする。
+8. `reference.png`をVAE Encodeし、denoise 0.65の初期latentとして使用する。
 
 ## 実行結果
 
@@ -45,6 +46,16 @@ Character Sheetから生成したCrop、Mask、Depth、Poseと既存LoRAを使�
 - 頭部表示: 確認
 - 足先表示: 確認
 - 512x768 Pose / Depth / Mask: 確認
+
+追加のReference latent比較:
+
+- Prompt ID: `2803e9d9-58a5-4437-885c-b761ae336e7f`
+- 出力: `simple_2p5d_reference/hiiragi_yukikaze_00001_.png`
+- ComfyUI状態: `success`
+- 顔・髪・標準衣装・白背景の維持: 改善を確認
+- 標準workflow反映後のPrompt ID: `3d651d11-4e7f-43ab-9f46-2821e7d65217`
+- 標準出力: `simple_2p5d/hiiragi_yukikaze_00004_.png`
+- Review `approved`とReadiness `True`の維持: 確認
 
 関連テスト:
 

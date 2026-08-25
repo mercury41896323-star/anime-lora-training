@@ -90,6 +90,11 @@ class Simple2p5DRigTest(unittest.TestCase):
             self.assertIn("cropped head", workflow["4"]["inputs"]["text"])
             self.assertIn("one character only", workflow["3"]["inputs"]["text"])
             self.assertIn("character sheet", workflow["4"]["inputs"]["text"])
+            self.assertEqual(workflow["11"]["class_type"], "LoadImage")
+            self.assertEqual(workflow["11"]["inputs"]["image"], "anime_studio/hiiragi_yukikaze/reference.png")
+            self.assertEqual(workflow["12"]["class_type"], "VAEEncode")
+            self.assertEqual(workflow["13"]["inputs"]["denoise"], 0.65)
+            self.assertEqual(controls["generation_stack"]["reference_latent"]["denoise"], 0.65)
 
 
 def write_settings(root: Path):

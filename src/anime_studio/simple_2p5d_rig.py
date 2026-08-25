@@ -762,16 +762,20 @@ def build_comfyui_workflow(
                 "strength": 0.65, "start_percent": 0.0, "end_percent": 0.8,
             },
         },
-        "11": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 768, "batch_size": 1}},
+        "11": {"class_type": "LoadImage", "inputs": {"image": input_refs["reference"]}},
         "12": {
+            "class_type": "VAEEncode",
+            "inputs": {"pixels": ["11", 0], "vae": ["1", 2]},
+        },
+        "13": {
             "class_type": "KSampler",
             "inputs": {
-                "model": ["2", 0], "positive": ["10", 0], "negative": ["10", 1], "latent_image": ["11", 0],
-                "seed": 1, "steps": 20, "cfg": 6.5, "sampler_name": "dpmpp_2m", "scheduler": "karras", "denoise": 1.0,
+                "model": ["2", 0], "positive": ["10", 0], "negative": ["10", 1], "latent_image": ["12", 0],
+                "seed": 1, "steps": 20, "cfg": 6.5, "sampler_name": "dpmpp_2m", "scheduler": "karras", "denoise": 0.65,
             },
         },
-        "13": {"class_type": "VAEDecode", "inputs": {"samples": ["12", 0], "vae": ["1", 2]}},
-        "14": {"class_type": "SaveImage", "inputs": {"images": ["13", 0], "filename_prefix": f"simple_2p5d/{character_id}"}},
+        "14": {"class_type": "VAEDecode", "inputs": {"samples": ["13", 0], "vae": ["1", 2]}},
+        "15": {"class_type": "SaveImage", "inputs": {"images": ["14", 0], "filename_prefix": f"simple_2p5d/{character_id}"}},
     }
 
 
@@ -809,6 +813,7 @@ def build_control_bundle(
         "generation_stack": {
             "checkpoint": checkpoint_name,
             "identity": {"provider": "character_lora", "model": lora_name, "strength": 0.7},
+            "reference_latent": {"provider": "vae_encode", "image": input_refs["reference"], "denoise": 0.65},
             "pose": {"provider": "controlnet_openpose", "model": openpose_controlnet_name, "strength": 1.0},
             "depth": {"provider": "controlnet_depth", "model": depth_controlnet_name, "strength": 0.65},
             "shape": {"provider": "simple_2p5d_rig", "role": "identity and silhouette anchor"},
