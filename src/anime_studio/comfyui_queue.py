@@ -149,14 +149,14 @@ def refresh_comfyui_job(
             urljoin(str(job["comfyui_base_url"]) + "/", f"history/{prompt_id}"),
             timeout_seconds=timeout_seconds,
         )
-        completed = prompt_id in response and bool(response[prompt_id])
+        status, execution_error = classify_comfyui_history(prompt_id, response)
         job.update(
             {
-                "status": "completed" if completed else "submitted",
+                "status": status,
                 "checked_at": timestamp,
                 "updated_at": timestamp,
                 "response": response,
-                "error": "",
+                "error": execution_error,
             }
         )
     except (HTTPError, URLError, TimeoutError, OSError, ValueError) as error:
@@ -170,6 +170,69 @@ def refresh_comfyui_job(
 
     write_queue(resolved_queue, queue)
     return ComfyQueueResult(queue_path=resolved_queue, job=job)
+
+
+def refresh_submitted_comfyui_jobs(
+    settings: AppSettings,
+    queue_path: str | Path | None = None,
+    timeout_seconds: float = 15.0,
+) -> list[ComfyQueueResult]:
+    resolved_queue = normalize_queue_path(settings, queue_path)
+    queue = read_queue(resolved_queue)
+    job_ids = [
+        str(job.get("job_id", ""))
+        for job in queue.get("jobs", [])
+        if isinstance(job, dict)
+        and str(job.get("status", "")) == "submitted"
+        and str(job.get("prompt_id", ""))
+    ]
+    return [
+        refresh_comfyui_job(
+            settings=settings,
+            job_id=job_id,
+            queue_path=resolved_queue,
+            timeout_seconds=timeout_seconds,
+        )
+        for job_id in job_ids
+    ]
+
+
+def classify_comfyui_history(prompt_id: str, response: dict[str, Any]) -> tuple[str, str]:
+    raw_record = response.get(prompt_id)
+    if not isinstance(raw_record, dict) or not raw_record:
+        return "submitted", ""
+    status_info = raw_record.get("status", {})
+    status_info = status_info if isinstance(status_info, dict) else {}
+    status_text = str(status_info.get("status_str", "")).lower()
+    error_message = extract_execution_error(status_info.get("messages", []))
+    if status_text in {"error", "failed"} or error_message:
+        return "failed", error_message or f"ComfyUI execution status: {status_text}"
+    if bool(status_info.get("completed", False)) or status_text in {"success", "completed"}:
+        return "completed", ""
+    if isinstance(raw_record.get("outputs"), dict):
+        return "completed", ""
+    return "submitted", ""
+
+
+def extract_execution_error(messages: Any) -> str:
+    if not isinstance(messages, list):
+        return ""
+    for message in reversed(messages):
+        if not isinstance(message, (list, tuple)) or len(message) < 2:
+            continue
+        message_type = str(message[0]).lower()
+        payload = message[1] if isinstance(message[1], dict) else {}
+        if message_type not in {"execution_error", "execution_interrupted", "error"}:
+            continue
+        detail = str(
+            payload.get("exception_message")
+            or payload.get("message")
+            or payload.get("exception_type")
+            or message_type
+        )
+        node_id = str(payload.get("node_id", ""))
+        return f"Node {node_id}: {detail}" if node_id else detail
+    return ""
 
 
 def list_comfyui_jobs(

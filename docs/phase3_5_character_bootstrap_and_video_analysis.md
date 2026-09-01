@@ -105,12 +105,11 @@ storyboard draft
 
 ## 4. 現時点の制約
 
-- Shot Detector / Splitter はまだ未実装
-- sequence は現状「一定秒数ごと」の仮分割
-- 類似フレーム除外はまだ未実装
-- 顔角度 / 表情 / 全身の画像理解分類はまだ未実装
-- Character Sheet Draft Generator はまだ未実装
-- 2.5D 定義の自動生成はまだ未実装
+- Shot Detector / Splitterは軽量ルールベースで、編集済み動画では人間の確認が必要
+- 類似フレーム除外は軽量特徴量による近似
+- 顔角度 / 表情 / 全身分類はheuristicで、画像理解モデルによる最終判定ではない
+- Character Sheet Draft、reviewed / master再取込、2.5D Definition生成は実装済み
+- Simple 2.5D Rigの最終承認は人間が行う
 
 ## 5. 次に進む順番
 

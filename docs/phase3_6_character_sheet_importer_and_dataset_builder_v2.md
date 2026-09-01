@@ -81,7 +81,7 @@ datasets/v2/<character_id>/direction/
 
 - Character Sheet Importer は fixed template crop の軽量版
 - 自動 crop 精度は sheet レイアウトに依存する
-- Dataset Builder v2 の `motion` dataset はまだ未実装
+- Dataset Builder v2 の `motion` は同一Shot内の連続フレーム対を保存する軽量版
 - video sample の分類は Phase 3.5 の heuristic classifier 依存
 
 ## 5. 推奨の使い方

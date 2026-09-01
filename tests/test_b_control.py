@@ -30,6 +30,7 @@ class BControlTest(unittest.TestCase):
             write_template(root)
             create_character_profile(settings, "sample_hero", "Sample Hero", trigger_tags=["sample_hero"])
             write_character_definition(root)
+            write_simple_2p5d_workflow(root)
             register_lora_result(
                 settings=settings,
                 character_id="sample_hero",
@@ -89,6 +90,8 @@ class BControlTest(unittest.TestCase):
             b_control_manifest = json.loads(result.b_control_manifest_path.read_text(encoding="utf-8"))
 
             self.assertEqual(manifest["generation_mode"], "B-control")
+            self.assertEqual(manifest["workflow_modes"], ["simple_2p5d_face_repair"])
+            self.assertEqual(result.workflows[0].workflow_mode, "simple_2p5d_face_repair")
             self.assertTrue(result.b_control_manifest_path.exists())
             self.assertEqual(b_control_manifest["manifest_type"], "storyboard_b_control_manifest")
             self.assertEqual(b_control_manifest["shots"][0]["controls"]["face_direction"], "three_quarter")
@@ -104,6 +107,8 @@ class BControlTest(unittest.TestCase):
             )
             self.assertIn("B-control guided generation", workflow["3"]["inputs"]["text"])
             self.assertIn("2.5D character master identity", workflow["3"]["inputs"]["text"])
+            self.assertEqual(workflow["18"]["class_type"], "SaveImage")
+            self.assertTrue(workflow["18"]["inputs"]["filename_prefix"].endswith("_face_repaired"))
 
 
 def write_template(root: Path) -> None:
@@ -146,6 +151,39 @@ def write_character_definition(root: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
+
+
+def write_simple_2p5d_workflow(root: Path) -> None:
+    output_path = root / "outputs" / "comfyui" / "sample_hero" / "simple_2p5d_control_workflow.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(
+            {
+                "2": {"class_type": "LoraLoader", "inputs": {"lora_name": "sample_hero_v1.safetensors"}},
+                "3": {"class_type": "CLIPTextEncode", "inputs": {"text": "sample_hero"}},
+                "4": {"class_type": "CLIPTextEncode", "inputs": {"text": "low quality"}},
+                "11": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 768}},
+                "12": {
+                    "class_type": "KSampler",
+                    "inputs": {"seed": 1, "steps": 20, "positive": ["3", 0], "negative": ["4", 0]},
+                },
+                "14": {"class_type": "SaveImage", "inputs": {"filename_prefix": "sample_hero", "images": ["13", 0]}},
+                "17": {
+                    "class_type": "ImageCompositeMasked",
+                    "inputs": {"destination": ["13", 0], "source": ["5", 0], "mask": ["16", 0]},
+                },
+                "18": {
+                    "class_type": "SaveImage",
+                    "inputs": {"filename_prefix": "sample_hero_face_repaired", "images": ["17", 0]},
+                },
+                "meta": {"face_repair": {"enabled": True}},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    readiness_path = root / "manifests" / "characters" / "sample_hero" / "simple_2p5d_generation_readiness.json"
+    readiness_path.write_text(json.dumps({"ready": True}) + "\n", encoding="utf-8")
 
 
 def write_settings(root: Path):

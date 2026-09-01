@@ -33,6 +33,7 @@ class StoryboardWorkflowItem:
     character_id: str
     workflow_path: str
     lora_name: str
+    workflow_mode: str = "lora_txt2img"
     queued_job_id: str = ""
 
 
@@ -89,14 +90,22 @@ def export_storyboard_comfyui_workflows(
             continue
         workflow_path = resolved_output_dir / f"{shot.order:03d}_{shot.shot_id}.json"
         try:
-            exported = export_comfyui_workflow(
-                settings=settings,
-                character_id=shot.character_id,
-                template_path=template_path,
-                output_path=workflow_path,
-                lora_index=lora_index,
-            )
-            workflow = json.loads(workflow_path.read_text(encoding="utf-8-sig"))
+            simple_workflow = load_ready_simple_2p5d_workflow(settings, shot.character_id) if b_control and template_path is None else None
+            if simple_workflow is not None:
+                workflow = simple_workflow
+                lora_name = find_workflow_lora_name(workflow)
+                workflow_mode = "simple_2p5d_face_repair"
+            else:
+                exported = export_comfyui_workflow(
+                    settings=settings,
+                    character_id=shot.character_id,
+                    template_path=template_path,
+                    output_path=workflow_path,
+                    lora_index=lora_index,
+                )
+                workflow = json.loads(workflow_path.read_text(encoding="utf-8-sig"))
+                lora_name = exported.lora_name
+                workflow_mode = "lora_txt2img"
             workflow = inject_shot_context(
                 workflow,
                 storyboard,
@@ -131,7 +140,8 @@ def export_storyboard_comfyui_workflows(
                     order=shot.order,
                     character_id=shot.character_id,
                     workflow_path=project_relative_path(settings, workflow_path),
-                    lora_name=exported.lora_name,
+                    lora_name=lora_name,
+                    workflow_mode=workflow_mode,
                     queued_job_id=queued_job_id,
                 )
             )
@@ -156,6 +166,7 @@ def export_storyboard_comfyui_workflows(
                 "workflow_count": len(workflows),
                 "skipped_count": len(skipped),
                 "generation_mode": "B-control" if b_control else "A-mode",
+                "workflow_modes": sorted({item.workflow_mode for item in workflows}),
                 "supplemental_manifests": {
                     "b_control": project_relative_path(settings, b_control_manifest_path)
                     if b_control_manifest_path is not None
@@ -214,9 +225,11 @@ def inject_shot_context(
                 inputs["height"] = shot.height
         if node.get("class_type") == "SaveImage":
             inputs = node.setdefault("inputs", {})
+            current_prefix = str(inputs.get("filename_prefix", ""))
+            suffix = "_face_repaired" if "face_repaired" in current_prefix else ""
             inputs["filename_prefix"] = (
                 f"anime_studio/storyboards/{storyboard.story_id}/"
-                f"{shot.order:03d}_{shot.shot_id}"
+                f"{shot.order:03d}_{shot.shot_id}{suffix}"
             )
 
     meta = workflow.setdefault("meta", {})
@@ -350,6 +363,28 @@ def iter_comfyui_nodes(value: Any):
 
 def stable_shot_seed(story_id: str, shot_id: str) -> int:
     return zlib.crc32(f"{story_id}:{shot_id}".encode("utf-8")) & 0xFFFFFFFF
+
+
+def load_ready_simple_2p5d_workflow(settings: AppSettings, character_id: str) -> dict[str, Any] | None:
+    manifest_dir = settings.project_root / "manifests" / "characters" / character_id
+    readiness_path = manifest_dir / "simple_2p5d_generation_readiness.json"
+    workflow_path = settings.project_root / "outputs" / "comfyui" / character_id / "simple_2p5d_control_workflow.json"
+    if not readiness_path.is_file() or not workflow_path.is_file():
+        return None
+    readiness = json.loads(readiness_path.read_text(encoding="utf-8-sig"))
+    if not bool(readiness.get("ready", False)):
+        return None
+    workflow = json.loads(workflow_path.read_text(encoding="utf-8-sig"))
+    if not any(node.get("class_type") == "ImageCompositeMasked" for node in iter_comfyui_nodes(workflow)):
+        return None
+    return workflow
+
+
+def find_workflow_lora_name(workflow: dict[str, Any]) -> str:
+    for node in iter_comfyui_nodes(workflow):
+        if node.get("class_type") in {"LoraLoader", "LoraLoaderModelOnly"}:
+            return str(node.get("inputs", {}).get("lora_name", ""))
+    return ""
 
 
 def normalize_output_dir(

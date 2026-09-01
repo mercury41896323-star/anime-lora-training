@@ -29,7 +29,7 @@ anime-video-phase35 `
   --bottom-trim 0.18
 ```
 
-この実行で、Kohyaの `dataset.toml` はraw抽出フレームではなくclean datasetを参照します。reviewed/masterまたは外部画像による2.5D Definitionがreadyでない場合、Kohya設定はまだ生成されません。
+この実行ではraw抽出フレームからclean候補まで作りますが、Kohya設定はまだ生成しません。`anime-clean-frame-review`で採用したreviewed clean datasetと、reviewed/masterまたは外部画像によるreadyな2.5D Definitionがそろった後に生成します。
 
 ## 人間による確認
 

@@ -322,8 +322,8 @@ Asset Classifier
 
 - **初期実装済み**
 - `src/anime_studio/dataset_builder_v2.py`
-- `character / expression / shot / direction` の4系統を出力
-- `motion` dataset は未実装
+- `character / expression / shot / direction / motion` の5系統を出力
+- `motion` は同一Shot内の連続フレーム対、時刻、タグを保持
 
 ---
 

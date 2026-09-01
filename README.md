@@ -32,7 +32,9 @@ RTX 3050 6GB VRAM環境を前提にした軽量な制作パイプラインとし
 - FFmpeg preview movie plan生成
 - ShotEditorへのTimeline Readiness表示
 - ローカルLoRA学習前のreadiness check / smoke workflow
+- Kohya console・GPU・終了コードの自動保存とOOM / NaN / 高温diagnostics
 - 動画フレームの字幕safe-area Crop / 文字系タグ除外 / clean dataset生成
+- 番号付きClean Frame確認画面と人間採用済みLoRA dataset生成
 - 実体PNGのCharacter Sheet Draftと人間向けreview checklist
 - Character Master Assetから実画像anchor付き2.5D Definition生成
 - 2.5D DefinitionのComfyUI B-control / 動画制御への自動注入
@@ -40,6 +42,9 @@ RTX 3050 6GB VRAM環境を前提にした軽量な制作パイプラインとし
 - Character SheetからCrop、12パーツMask、Depth、Pose、透明PNG、簡易Meshを生成するSimple 2.5D Rig Pipeline
 - LoRA + OpenPose ControlNet + Depth ControlNet用ComfyUI workflowとLive2D bridge生成
 - Simple 2.5D Rigの検査・人間承認・LoRA明示binding・生成readiness gate
+- 承認済みReferenceと頭部MaskによるComfyUI自動Face Repair
+- 任意のIPAdapter Plus FaceによるLoRA + 2.5D同一性補強とモデルreadiness監視
+- 環境・キャラクター・Storyboard / Timelineをまとめて確認するStatus Dashboard
 - character / motion / camera / background / lighting領域別dataset保存
 - readyな2.5D Definition完成後だけ補完用LoRA設定を生成する学習ゲート
 - motion / camera / background / lighting用CPU軽量trainerとB-control連携
@@ -47,7 +52,10 @@ RTX 3050 6GB VRAM環境を前提にした軽量な制作パイプラインとし
 動画からCharacter Master、2.5D制御までの手順は `docs/video_character_consistency_pipeline.md` を参照してください。
 新しい学習設計は `docs/2p5d_first_learning_architecture.md` を参照してください。
 Simple 2.5D Rigの作成手順は `docs/simple_2p5d_rig_pipeline.md` を参照してください。
+IPAdapterによる同一性補強は `docs/ipadapter_identity_control.md` を参照してください。
+動画由来フレームの人間確認は `docs/clean_frame_review.md` を参照してください。
 専用trainerの使い方は `docs/domain_trainers.md`、ニューラル学習providerは `docs/neural_trainers.md` を参照してください。
+LoRA学習後の診断は `docs/training_diagnostics.md` を参照してください。
 
 ## まず動かすもの
 
@@ -68,6 +76,14 @@ PowerShell用の簡易スクリプトも用意しています。
 ```
 
 実行すると `assets/raw` を走査し、`assets/processed/inventory.json` に素材一覧を出力します。
+
+制作環境と次に必要な作業をブラウザーで確認する場合は、次を実行します。
+
+```powershell
+.\scripts\open_studio_status.ps1
+```
+
+詳細は `docs/studio_status_dashboard.md` を参照してください。
 
 ## 開発方針
 
@@ -486,9 +502,12 @@ template内の`LoraLoader`ノードには`lora_name`、`strength_model`、`stren
 学習前に次を確認できます。
 
 ```powershell
+python -m anime_studio.cli character confirm-source-rights --id sample_hero --reviewer "自分の名前" --confirm
 python -m anime_studio.cli training readiness --character-id sample_hero
 python -m anime_studio.cli training smoke --character-id sample_hero --pretrained-model C:\models\sd15.safetensors --kohya-root C:\tools\kohya_ss --min-images 1
 ```
+
+素材の作成者・ライセンス・学習利用可否を確認できた場合だけ、最初のコマンドを実行します。未確認のCharacterProfileは生成テストに使えますが、学習readinessは停止します。
 
 詳細は `docs/local_training_start.md` を参照してください。
 

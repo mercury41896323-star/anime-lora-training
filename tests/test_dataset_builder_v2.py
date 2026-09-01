@@ -58,10 +58,26 @@ class DatasetBuilderV2Test(unittest.TestCase):
             manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
 
             self.assertEqual(manifest["manifest_type"], "purpose_dataset_bundle")
-            self.assertEqual(result.dataset_count, 4)
+            self.assertEqual(result.dataset_count, 5)
             self.assertGreater(result.total_images, 0)
             self.assertTrue((root / "datasets" / "v2" / "sample_yonagi" / "character" / "manifest.json").exists())
             self.assertTrue((root / "datasets" / "v2" / "sample_yonagi" / "expression" / "manifest.json").exists())
+            motion_manifest = json.loads(
+                (root / "datasets" / "v2" / "sample_yonagi" / "motion" / "manifest.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(motion_manifest["pair_count"], 1)
+            self.assertEqual(motion_manifest["image_count"], 2)
+            self.assertEqual(motion_manifest["entries"][0]["shot_id"], "shot_001")
+
+            stale_image = root / "datasets" / "v2" / "sample_yonagi" / "motion" / "images" / "stale.png"
+            stale_image.write_bytes(b"stale")
+            build_purpose_datasets_v2(
+                settings=settings,
+                character_id="sample_yonagi",
+                video_id="scene01",
+                sheet_id=sheet_result.sheet_id,
+            )
+            self.assertFalse(stale_image.exists())
 
 
 def write_phase35_manifests(root: Path) -> None:

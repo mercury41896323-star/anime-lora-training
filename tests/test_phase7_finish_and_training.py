@@ -10,7 +10,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from anime_studio.character_profile import create_character_profile
+from anime_studio.character_profile import confirm_character_source_rights, create_character_profile
 from anime_studio.edit_preview import build_preview_movie
 from anime_studio.settings import load_settings
 from anime_studio.storyboard import add_shot, create_storyboard
@@ -74,6 +74,11 @@ class Phase7FinishAndTrainingTest(unittest.TestCase):
             root = Path(temp_dir)
             settings = write_settings(root)
             create_character_profile(settings, "sample_hero", "Sample Hero", ["sample hero"])
+            blocked = check_training_readiness(settings, "sample_hero", min_images=0)
+            blocked_manifest = json.loads(blocked.manifest_path.read_text(encoding="utf-8"))
+            self.assertFalse(blocked.ready)
+            self.assertIn("source_rights_unconfirmed", {item["code"] for item in blocked_manifest["issues"]})
+            confirm_character_source_rights(settings, "sample_hero", "test reviewer")
             image_dir = root / "assets" / "processed" / "characters" / "sample_hero" / "sources" / "image"
             image_dir.mkdir(parents=True)
             (image_dir / "sample_hero_front.png").write_bytes(b"image")

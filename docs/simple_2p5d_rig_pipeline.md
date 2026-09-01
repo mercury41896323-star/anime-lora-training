@@ -75,7 +75,25 @@ RTX 3050 6GB環境では、ComfyUI作者が公開しているFP16 safetensors版
 
 生成workflowは`solo`、`single subject`、`head fully visible`、`feet fully visible`を正条件に含め、複数人物、キャラクターシート、頭部・足先Cropを負条件へ入れます。OpenPoseを1.0、Depthを0.65の初期強度として、全身構図を優先します。
 
+任意でIPAdapter Plus FaceをLoRA後段へ追加できます。6GB環境ではweight 0.55を初期値とし、KSampler前だけに適用します。導入と無効化は`docs/ipadapter_identity_control.md`を参照してください。
+
+IPAdapterには512x768全身Referenceではなく、Rig生成時に作る512x512 `identity_reference.png`を渡します。全身ReferenceはReference LatentとFace Repairに残し、用途を分離します。
+
 外部IP-Adapterがない環境でも同一性を補強するため、正面全身の`reference.png`を標準VAEでlatentへ変換し、denoise 0.65のimg2img初期値として使います。LoRAだけで生成するより、顔、衣装、シルエット、白背景を維持しやすい軽量構成です。
+
+## 自動Face Repair
+
+最終VAEDecode後に、2.5D Silhouetteから生成した`face_repair_mask.png`を読み込みます。Mask境界を12px Featherし、承認済み`reference.png`の頭部・前髪・首元だけを`ImageCompositeMasked`で自動合成します。身体、衣装、手足、背景は生成結果を維持します。
+
+既存キャラクターへRig再生成なしで追加する場合:
+
+```powershell
+anime-simple-2p5d-manage refresh-workflow `
+  --character-id hiiragi_yukikaze `
+  --comfyui-input-dir "C:\Users\pfsgs\AppData\Local\Comfy-Desktop\ComfyUI-Shared\input"
+```
+
+出力名は`<character_id>_face_repaired_*.png`です。Referenceと生成結果の頭部位置が大きく異なる横顔・激しいポーズでは、固定Mask合成ではなく角度別ReferenceまたはFaceDetailer/IP-Adapterを使用します。
 
 ## 制約
 
@@ -145,7 +163,7 @@ anime-simple-2p5d-manage readiness `
 1. Rig reviewが`approved`
 2. 明示選択したLoRAがComfyUI models内に存在
 3. OpenPose・Depth ControlNetが存在
-4. reference・pose・depth・maskがComfyUI input内に存在
+4. reference・pose・depth・mask・face_repair_maskがComfyUI input内に存在
 5. API workflowが存在
 
 状態遷移は`built -> pending_review -> approved -> lora_bound -> generation_ready`です。

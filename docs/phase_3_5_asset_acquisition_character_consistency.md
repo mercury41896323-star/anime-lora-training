@@ -50,8 +50,8 @@ Phase 3.5 は既存Phase 1〜7を破棄するものではない。Phase 3とPhas
 - Shot boundary の精度はまだ軽量 rule-based
 - 類似度判定は tag / file-size ベースの簡易版
 - 顔角度 / 表情 / 全身分類は heuristic
-- 2.5D Definition は control manifest であり rig ではない
-- Character Master Asset からの Dataset Builder v2 はまだ未実装
+- 2.5D Definition はcontrol manifestで、Simple 2.5D Rig PipelineがMask / Depth / Pose / Meshを補う
+- Character Master Assetと動画sampleからのDataset Builder v2を実装済み
 
 ---
 
@@ -254,7 +254,7 @@ Character Sheet Draftは最終正解としない。
 
 Character Master Assetと動画から抽出した高品質フレームを使い、目的別にDatasetを構築する。
 
-現時点ではまだ未実装。
+`src/anime_studio/dataset_builder_v2.py` で `character / expression / shot / direction / motion` を用途別に出力する。motionは同一Shot内の連続フレーム対を保持する。
 
 ---
 

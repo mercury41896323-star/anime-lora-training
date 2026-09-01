@@ -16,6 +16,7 @@ from anime_studio.comfyui_queue import (
     enqueue_comfyui_workflow,
     list_comfyui_jobs,
     refresh_comfyui_job,
+    refresh_submitted_comfyui_jobs,
     submit_comfyui_job,
 )
 from anime_studio.settings import load_settings
@@ -54,10 +55,8 @@ class ComfyUIQueueTest(unittest.TestCase):
                     workflow_path=workflow_path,
                     base_url=server.base_url,
                 )
-                refreshed = refresh_comfyui_job(
-                    settings,
-                    job_id=submitted.job["job_id"],
-                )
+                refreshed_jobs = refresh_submitted_comfyui_jobs(settings)
+                refreshed = refreshed_jobs[0]
             finally:
                 server.stop()
 
@@ -65,12 +64,52 @@ class ComfyUIQueueTest(unittest.TestCase):
             self.assertEqual(submitted.job["status"], "submitted")
             self.assertEqual(submitted.job["prompt_id"], "prompt-test-1")
             self.assertEqual(submitted.job["queue_number"], 1)
+            self.assertEqual(len(refreshed_jobs), 1)
             self.assertEqual(refreshed.job["status"], "completed")
+
+    def test_refresh_preserves_comfyui_execution_error(self) -> None:
+        history = {
+            "prompt-test-1": {
+                "outputs": {},
+                "status": {
+                    "status_str": "error",
+                    "completed": False,
+                    "messages": [
+                        [
+                            "execution_error",
+                            {
+                                "node_id": "12",
+                                "exception_type": "OutOfMemoryError",
+                                "exception_message": "CUDA out of memory",
+                            },
+                        ]
+                    ],
+                },
+            }
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            settings = write_settings(root)
+            server = FakeComfyServer(history_payload=history)
+            server.start()
+            try:
+                submitted = submit_comfyui_job(
+                    settings,
+                    workflow_path=write_workflow(root),
+                    base_url=server.base_url,
+                )
+                refreshed = refresh_comfyui_job(settings, job_id=submitted.job["job_id"])
+            finally:
+                server.stop()
+
+            self.assertEqual(refreshed.job["status"], "failed")
+            self.assertEqual(refreshed.job["error"], "Node 12: CUDA out of memory")
 
 
 class FakeComfyServer:
-    def __init__(self) -> None:
+    def __init__(self, history_payload: dict[str, object] | None = None) -> None:
         self.received_payload: dict[str, object] = {}
+        self.history_payload = history_payload or {"prompt-test-1": {"outputs": {"1": {"images": []}}}}
         self.server = HTTPServer(("127.0.0.1", 0), self.build_handler())
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
@@ -98,7 +137,7 @@ class FakeComfyServer:
 
             def do_GET(self) -> None:
                 if self.path == "/history/prompt-test-1":
-                    self.send_json({"prompt-test-1": {"outputs": {"1": {"images": []}}}})
+                    self.send_json(owner.history_payload)
                     return
                 self.send_json({})
 

@@ -161,6 +161,13 @@ def build_purpose_datasets_v2(
         summary = export_purpose_dataset(settings, character_id, dataset_kind, sources)
         summaries.append(summary)
         total_images += summary.image_count
+    motion_summary = export_motion_dataset(
+        settings,
+        character_id,
+        gather_motion_pairs(sampled_manifest),
+    )
+    summaries.append(motion_summary)
+    total_images += motion_summary.image_count
 
     manifest_path = settings.project_root / "manifests" / "characters" / character_id / "dataset_builder_v2.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -181,7 +188,7 @@ def build_purpose_datasets_v2(
                 "datasets": [asdict(summary) for summary in summaries],
                 "notes": [
                     "Dataset Builder v2 groups assets by purpose instead of sending everything into a single LoRA dataset.",
-                    "Motion-specific temporal datasets are still a future improvement and are not emitted in this lightweight version.",
+                    "Motion entries preserve consecutive frame pairs within each detected shot.",
                 ],
             },
             ensure_ascii=False,
@@ -265,7 +272,7 @@ def export_purpose_dataset(
 ) -> PurposeDatasetSummary:
     dataset_dir = settings.project_root / "datasets" / "v2" / character_id / dataset_kind
     images_dir = dataset_dir / "images"
-    images_dir.mkdir(parents=True, exist_ok=True)
+    reset_generated_images(images_dir)
     exported_entries: list[dict[str, object]] = []
     seen_sources: set[str] = set()
     for index, source in enumerate(sources, start=1):
@@ -315,6 +322,108 @@ def export_purpose_dataset(
         image_count=len(exported_entries),
         manifest_path=project_relative_path(settings, manifest_path),
     )
+
+
+def gather_motion_pairs(sampled_manifest: dict[str, object]) -> list[tuple[dict[str, object], dict[str, object]]]:
+    grouped: dict[str, list[dict[str, object]]] = {}
+    for raw_item in sampled_manifest.get("frames", []):
+        item = dict(raw_item)
+        shot_id = str(item.get("shot_id", "unknown"))
+        grouped.setdefault(shot_id, []).append(item)
+    pairs: list[tuple[dict[str, object], dict[str, object]]] = []
+    for shot_id in sorted(grouped):
+        ordered = sorted(
+            grouped[shot_id],
+            key=lambda item: (
+                float(item.get("timestamp_seconds", 0.0) or 0.0),
+                int(item.get("frame_index", 0) or 0),
+            ),
+        )
+        pairs.extend(zip(ordered, ordered[1:]))
+    return pairs
+
+
+def export_motion_dataset(
+    settings: AppSettings,
+    character_id: str,
+    pairs: list[tuple[dict[str, object], dict[str, object]]],
+) -> PurposeDatasetSummary:
+    dataset_dir = settings.project_root / "datasets" / "v2" / character_id / "motion"
+    images_dir = dataset_dir / "images"
+    reset_generated_images(images_dir)
+    entries: list[dict[str, object]] = []
+    exported_images: set[str] = set()
+    for index, (start, end) in enumerate(pairs, start=1):
+        start_path = resolve_project_path(settings, str(start.get("frame_path", "")))
+        end_path = resolve_project_path(settings, str(end.get("frame_path", "")))
+        if not start_path.is_file() or not end_path.is_file():
+            continue
+        shot_id = str(start.get("shot_id", "unknown"))
+        start_output = images_dir / f"{index:03d}_motion_{shot_id}_from{start_path.suffix}"
+        end_output = images_dir / f"{index:03d}_motion_{shot_id}_to{end_path.suffix}"
+        motion_tags = dedupe_tags(
+            [
+                character_id,
+                "motion_reference",
+                *[str(tag) for tag in start.get("tags", [])],
+                *[str(tag) for tag in end.get("tags", [])],
+            ]
+        )
+        for source, destination, role in (
+            (start_path, start_output, "motion_start"),
+            (end_path, end_output, "motion_end"),
+        ):
+            if destination.resolve() != source.resolve():
+                shutil.copy2(source, destination)
+            destination.with_suffix(".txt").write_text(
+                ", ".join(dedupe_tags([*motion_tags, role])) + "\n",
+                encoding="utf-8",
+            )
+            exported_images.add(project_relative_path(settings, destination))
+        entries.append(
+            {
+                "pair_id": f"motion_{index:06d}",
+                "shot_id": shot_id,
+                "from_image": project_relative_path(settings, start_output),
+                "to_image": project_relative_path(settings, end_output),
+                "start_seconds": float(start.get("timestamp_seconds", 0.0) or 0.0),
+                "end_seconds": float(end.get("timestamp_seconds", 0.0) or 0.0),
+                "tags": motion_tags,
+                "training_role": "2p5d_motion_transition_and_lora_inbetween_completion",
+            }
+        )
+    manifest_path = dataset_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "manifest_type": DATASET_MANIFEST_TYPE,
+                "generated_at": utc_timestamp(),
+                "character_id": character_id,
+                "dataset_kind": "motion",
+                "pair_count": len(entries),
+                "image_count": len(exported_images),
+                "entries": entries,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return PurposeDatasetSummary(
+        dataset_kind="motion",
+        dataset_dir=project_relative_path(settings, dataset_dir),
+        image_count=len(exported_images),
+        manifest_path=project_relative_path(settings, manifest_path),
+    )
+
+
+def reset_generated_images(images_dir: Path) -> None:
+    images_dir.mkdir(parents=True, exist_ok=True)
+    for path in images_dir.iterdir():
+        if path.is_file():
+            path.unlink()
 
 
 def add_sources(target: list[DatasetSourceAsset], values: Iterable[DatasetSourceAsset]) -> None:

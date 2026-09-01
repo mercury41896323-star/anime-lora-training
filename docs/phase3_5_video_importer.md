@@ -79,11 +79,9 @@ anime-studio training video-smoke `
 
 ## 現時点の制約
 
-- FFprobe による duration / fps / codec 取得はまだ未実装
-- Shot 分割はまだ未実装
-- フレーム抽出はまだ一定fpsの単純抽出
-- 類似フレーム除外はまだ未実装
-- Character Sheet Draft 生成はまだ未実装
+- Video Importer単体は素材登録に限定し、FFprobe・適応fps・Shot分割は `anime-video-shot` / `anime-video-phase35` が担当する
+- Shot分割と類似フレーム除外は低負荷な近似処理のため、人間の確認が必要
+- Character Sheet Draft生成とreviewed / master再取込は後段CLIで実装済み
 
 ## 次の実装候補
 

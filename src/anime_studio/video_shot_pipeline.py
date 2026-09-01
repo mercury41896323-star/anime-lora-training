@@ -495,7 +495,7 @@ def read_frame_tags(frame_path: Path) -> list[str]:
         try:
             record = load_tag_record(record_path)
             return [normalize_tag(tag) for tag in record.final_tags]
-        except Exception:
+        except (OSError, ValueError, KeyError, TypeError):
             pass
     caption_path = frame_path.with_suffix(".txt")
     if caption_path.exists():

@@ -74,6 +74,13 @@ python -m anime_studio.cli comfyui queue-refresh --job-id <job_id>
 ```
 
 `prompt_id`がComfyUI履歴に見つかると、ローカルキューのstatusが`completed`になります。
+ComfyUIがNode実行エラーを返した場合は`failed`となり、Node番号とエラー本文を保存します。
+
+送信済みの全Jobをまとめて更新する場合:
+
+```powershell
+python -m anime_studio.cli comfyui queue-refresh-all
+```
 
 ## 6. 生成結果をCharacterProfile資産へ取り込む
 

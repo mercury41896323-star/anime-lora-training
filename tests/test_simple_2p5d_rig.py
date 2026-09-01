@@ -14,10 +14,35 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from anime_studio.character_profile import load_character_profile
 from anime_studio.settings import load_settings
-from anime_studio.simple_2p5d_rig import build_simple_2p5d_rig_pipeline
+from anime_studio.simple_2p5d_rig import build_comfyui_workflow, build_simple_2p5d_rig_pipeline
 
 
 class Simple2p5DRigTest(unittest.TestCase):
+    def test_optional_ipadapter_is_inserted_after_lora_without_changing_conditioning(self) -> None:
+        workflow = build_comfyui_workflow(
+            character_id="identity_hero",
+            input_refs={
+                "pose": "pose.png",
+                "depth": "depth.png",
+                "reference": "reference.png",
+                "face_repair_mask": "face_repair_mask.png",
+            },
+            checkpoint_name="sd15.safetensors",
+            lora_name="identity_hero.safetensors",
+            openpose_controlnet_name="openpose.safetensors",
+            depth_controlnet_name="depth.safetensors",
+            enable_ipadapter=True,
+            ipadapter_weight=0.6,
+        )
+
+        self.assertEqual(workflow["19"]["class_type"], "IPAdapterUnifiedLoader")
+        self.assertEqual(workflow["19"]["inputs"]["model"], ["2", 0])
+        self.assertEqual(workflow["20"]["class_type"], "IPAdapterAdvanced")
+        self.assertEqual(workflow["21"]["class_type"], "LoadImage")
+        self.assertEqual(workflow["20"]["inputs"]["image"], ["21", 0])
+        self.assertEqual(workflow["20"]["inputs"]["weight"], 0.6)
+        self.assertEqual(workflow["13"]["inputs"]["model"], ["20", 0])
+
     def test_builds_sheet_to_rig_controls_workflow_and_live2d_bridge(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -67,6 +92,8 @@ class Simple2p5DRigTest(unittest.TestCase):
             self.assertTrue(result.primary_reference_path.exists())
             self.assertTrue(result.workflow_ready)
             self.assertTrue((comfyui_input / "anime_studio" / "hiiragi_yukikaze" / "pose.png").exists())
+            self.assertTrue((comfyui_input / "anime_studio" / "hiiragi_yukikaze" / "face_repair_mask.png").exists())
+            self.assertTrue((comfyui_input / "anime_studio" / "hiiragi_yukikaze" / "identity_reference.png").exists())
             self.assertEqual(controls["generation_stack"]["pose"]["strength"], 1.0)
             self.assertTrue(all(controls["readiness"].values()))
             self.assertEqual(workflow["6"]["class_type"], "ControlNetLoader")
@@ -85,6 +112,11 @@ class Simple2p5DRigTest(unittest.TestCase):
                 self.assertIsNotNone(bounds)
                 self.assertGreaterEqual(bounds[1], 50)
                 self.assertLessEqual(bounds[3], 720)
+            with Image.open(comfyui_input / "anime_studio" / "hiiragi_yukikaze" / "face_repair_mask.png") as face_mask:
+                self.assertEqual(face_mask.size, (512, 768))
+                self.assertIsNotNone(face_mask.getbbox())
+            with Image.open(comfyui_input / "anime_studio" / "hiiragi_yukikaze" / "identity_reference.png") as identity:
+                self.assertEqual(identity.size, (512, 512))
 
             self.assertIn("head fully visible", workflow["3"]["inputs"]["text"])
             self.assertIn("cropped head", workflow["4"]["inputs"]["text"])
@@ -95,6 +127,13 @@ class Simple2p5DRigTest(unittest.TestCase):
             self.assertEqual(workflow["12"]["class_type"], "VAEEncode")
             self.assertEqual(workflow["13"]["inputs"]["denoise"], 0.65)
             self.assertEqual(controls["generation_stack"]["reference_latent"]["denoise"], 0.65)
+            self.assertTrue(controls["primary_reference"].endswith("reference.png"))
+            self.assertTrue(controls["identity_reference"].endswith("identity_reference.png"))
+            self.assertEqual(workflow["15"]["class_type"], "LoadImageMask")
+            self.assertEqual(workflow["16"]["class_type"], "FeatherMask")
+            self.assertEqual(workflow["17"]["class_type"], "ImageCompositeMasked")
+            self.assertTrue(workflow["18"]["inputs"]["filename_prefix"].endswith("_face_repaired"))
+            self.assertEqual(controls["generation_stack"]["face_repair"]["provider"], "reference_face_composite")
 
 
 def write_settings(root: Path):

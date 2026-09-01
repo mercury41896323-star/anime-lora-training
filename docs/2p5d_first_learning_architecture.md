@@ -81,7 +81,8 @@ character LoRAに加えて、motion・camera・background・lightingも学習用
 最終Kohya設定を生成する条件:
 
 - CharacterProfileが存在する
-- clean datasetが存在する
+- 素材の学習利用権が確認済み
+- 人間が採用したreviewed clean datasetが存在する
 - `character_2p5d_definition.json` の `definition_status` が `ready`
 - caption数と最低画像数を満たす
 

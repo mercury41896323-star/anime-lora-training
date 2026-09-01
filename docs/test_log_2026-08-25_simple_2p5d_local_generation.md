@@ -57,6 +57,14 @@ Character Sheetから生成したCrop、Mask、Depth、Poseと既存LoRAを使�
 - 標準出力: `simple_2p5d/hiiragi_yukikaze_00004_.png`
 - Review `approved`とReadiness `True`の維持: 確認
 
+自動Face Repair実機結果:
+
+- 最終Prompt ID: `f1a40047-4a6c-4db2-9600-751dd495ce72`
+- 出力: `simple_2p5d/hiiragi_yukikaze_face_repaired_00002_.png`
+- `LoadImageMask -> FeatherMask -> ImageCompositeMasked -> SaveImage`: 成功
+- 元Referenceの顔・前髪への自動置換: 確認
+- Review `approved`とReadiness `True`: 維持
+
 関連テスト:
 
 ```text

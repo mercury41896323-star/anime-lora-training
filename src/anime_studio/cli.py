@@ -7,12 +7,13 @@ from pathlib import Path
 from .asset_inventory import collect_asset_inventory
 from .asset_library import collect_asset_library, write_asset_library_index
 from .character_manager import register_character_asset
-from .character_profile import create_character_profile
+from .character_profile import confirm_character_source_rights, create_character_profile
 from .comfyui_queue import (
     DEFAULT_COMFYUI_BASE_URL,
     enqueue_comfyui_workflow,
     list_comfyui_jobs,
     refresh_comfyui_job,
+    refresh_submitted_comfyui_jobs,
     submit_comfyui_job,
 )
 from .comfyui_results import import_comfyui_results
@@ -25,6 +26,7 @@ from .kohya_config import KohyaLowVramSettings, generate_kohya_low_vram_config
 from .lora_manifest import generate_lora_manifest
 from .lora_registry import list_lora_artifacts, register_lora_result
 from .settings import load_settings
+from .studio_status import build_studio_status, open_studio_dashboard
 from .storyboard import add_shot, create_storyboard, list_storyboard_shots
 from .storyboard_comfyui import export_storyboard_comfyui_workflows
 from .storyboard_editor import write_storyboard_editor
@@ -116,6 +118,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     character_register.add_argument("--id", required=True, help="Stable character id.")
     character_register.add_argument("--source", required=True, help="Source asset path.")
+    character_rights = character_subparsers.add_parser(
+        "confirm-source-rights",
+        help="Record explicit permission to use character sources for training.",
+    )
+    character_rights.add_argument("--id", required=True, help="Character id.")
+    character_rights.add_argument("--reviewer", required=True, help="Person confirming the source rights.")
+    character_rights.add_argument("--notes", default="", help="Optional permission or license notes.")
+    character_rights.add_argument(
+        "--confirm",
+        action="store_true",
+        required=True,
+        help="Required explicit confirmation flag.",
+    )
 
     storyboard = subparsers.add_parser(
         "storyboard",
@@ -393,6 +408,16 @@ def build_parser() -> argparse.ArgumentParser:
     kohya.add_argument("--network-dim", type=int, default=16, help="LoRA rank.")
     kohya.add_argument("--network-alpha", type=int, default=8, help="LoRA alpha.")
     kohya.add_argument("--learning-rate", default="1e-4", help="Learning rate.")
+    kohya.add_argument(
+        "--dataset-dir",
+        default=None,
+        help="Optional reviewed dataset directory. Defaults to datasets/lora/<character-id>.",
+    )
+    kohya.add_argument(
+        "--require-2p5d",
+        action="store_true",
+        help="Require a ready Character 2.5D Definition before writing training files.",
+    )
     lora_register = lora_subparsers.add_parser(
         "register-result",
         help="Link a trained LoRA model file to a CharacterProfile.",
@@ -535,6 +560,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=15.0,
         help="HTTP timeout in seconds.",
     )
+    comfyui_queue_refresh_all = comfyui_subparsers.add_parser(
+        "queue-refresh-all",
+        help="Refresh every submitted job from ComfyUI history.",
+    )
+    comfyui_queue_refresh_all.add_argument(
+        "--queue",
+        default=None,
+        help="Queue JSON path. Defaults to queues/comfyui/jobs.json.",
+    )
+    comfyui_queue_refresh_all.add_argument(
+        "--timeout",
+        type=float,
+        default=15.0,
+        help="HTTP timeout in seconds per job.",
+    )
     comfyui_import_results = comfyui_subparsers.add_parser(
         "import-results",
         help="Import generated ComfyUI image outputs into a CharacterProfile asset folder.",
@@ -609,6 +649,8 @@ def build_parser() -> argparse.ArgumentParser:
     training_ready.add_argument("--character-id", required=True, help="Character id.")
     training_ready.add_argument("--min-images", type=int, default=20, help="Minimum recommended image count.")
     training_ready.add_argument("--output", default=None, help="Optional readiness manifest path.")
+    training_ready.add_argument("--dataset-dir", default=None, help="Optional reviewed dataset directory.")
+    training_ready.add_argument("--require-2p5d", action="store_true", help="Require a ready 2.5D Definition.")
     training_smoke = training_subparsers.add_parser(
         "smoke",
         help="Run dataset -> Kohya config -> readiness without launching training.",
@@ -619,6 +661,14 @@ def build_parser() -> argparse.ArgumentParser:
     training_smoke.add_argument("--min-images", type=int, default=1, help="Minimum image count for smoke readiness.")
     training_smoke.add_argument("--provider", default="baseline", help="Tag provider for smoke auto tags.")
     training_smoke.add_argument("--output", default=None, help="Optional smoke manifest path.")
+    status = subparsers.add_parser(
+        "status",
+        help="Build a system, character, and production readiness dashboard.",
+    )
+    status.add_argument("--output-dir", default=None, help="Dashboard output directory.")
+    status.add_argument("--comfyui-url", default="http://127.0.0.1:8188", help="ComfyUI API base URL.")
+    status.add_argument("--no-live", action="store_true", help="Skip live GPU and ComfyUI probes.")
+    status.add_argument("--open", action="store_true", help="Open the generated dashboard in the default browser.")
     return parser
 
 
@@ -634,6 +684,22 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = load_settings(args.config)
+
+    if args.command == "status":
+        result = build_studio_status(
+            settings=settings,
+            output_dir=args.output_dir,
+            comfyui_url=args.comfyui_url,
+            probe_live=not args.no_live,
+        )
+        print(f"Status JSON: {result.json_path}")
+        print(f"Status dashboard: {result.html_path}")
+        print(f"Overall: {result.overall_status}")
+        print(f"Blocking: {result.blocking_count}")
+        print(f"Warnings: {result.warning_count}")
+        if args.open:
+            open_studio_dashboard(result.html_path)
+        return 1 if result.blocking_count else 0
 
     if args.command == "inventory":
         inventory = collect_asset_inventory(settings)
@@ -705,6 +771,16 @@ def main(argv: list[str] | None = None) -> int:
             source_path=args.source,
         )
         print(f"Registered {asset.kind} asset: {asset.stored_path}")
+        return 0
+
+    if args.command == "character" and args.character_command == "confirm-source-rights":
+        profile_path = confirm_character_source_rights(
+            settings=settings,
+            character_id=args.id,
+            reviewer=args.reviewer,
+            notes=args.notes,
+        )
+        print(f"Confirmed source rights: {profile_path}")
         return 0
 
     if args.command == "storyboard" and args.storyboard_command == "init":
@@ -937,6 +1013,8 @@ def main(argv: list[str] | None = None) -> int:
                 network_alpha=args.network_alpha,
                 learning_rate=args.learning_rate,
             ),
+            dataset_dir=args.dataset_dir,
+            require_2p5d=args.require_2p5d,
         )
         print(f"Wrote Kohya config directory: {result.config_dir}")
         print(f"Dataset images: {result.dataset_image_count}")
@@ -1032,7 +1110,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Queue: {result.queue_path}")
         if result.job.get("error"):
             print(f"Error: {result.job['error']}")
-        return 0
+        return 1 if result.job["status"] == "failed" else 0
 
     if args.command == "comfyui" and args.comfyui_command == "queue-list":
         jobs = list_comfyui_jobs(settings=settings, queue_path=args.queue)
@@ -1056,7 +1134,26 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Prompt ID: {result.job.get('prompt_id', '')}")
         if result.job.get("error"):
             print(f"Error: {result.job['error']}")
-        return 0
+        return 1 if result.job["status"] == "failed" else 0
+
+    if args.command == "comfyui" and args.comfyui_command == "queue-refresh-all":
+        results = refresh_submitted_comfyui_jobs(
+            settings=settings,
+            queue_path=args.queue,
+            timeout_seconds=args.timeout,
+        )
+        if not results:
+            print("No submitted ComfyUI queue jobs.")
+            return 0
+        failed_count = 0
+        for result in results:
+            status = str(result.job["status"])
+            failed_count += status == "failed"
+            print(f"{result.job['job_id']}: {status} / prompt={result.job.get('prompt_id', '')}")
+            if result.job.get("error"):
+                print(f"  Error: {result.job['error']}")
+        print(f"Refreshed: {len(results)} / Failed: {failed_count}")
+        return 1 if failed_count else 0
 
     if args.command == "comfyui" and args.comfyui_command == "import-results":
         result = import_comfyui_results(
@@ -1135,6 +1232,8 @@ def main(argv: list[str] | None = None) -> int:
             character_id=args.character_id,
             min_images=args.min_images,
             output_path=args.output,
+            dataset_dir=args.dataset_dir,
+            require_2p5d=args.require_2p5d,
         )
         print(f"Wrote training readiness: {result.manifest_path}")
         print(f"Ready: {result.ready}")

@@ -8,7 +8,7 @@ from pathlib import Path
 from .character_2p5d_definition import generate_character_2p5d_definition
 from .character_bootstrap import bootstrap_character_from_video
 from .character_master_asset import import_character_master_asset
-from .character_profile import character_profile_path
+from .character_profile import character_profile_path, confirm_character_source_rights
 from .character_sheet_draft import generate_character_sheet_draft
 from .frame_extraction import build_frame_extraction_plan, extract_frames
 from .kohya_config import KohyaLowVramSettings, generate_kohya_low_vram_config
@@ -61,6 +61,7 @@ def run_video_phase35_pipeline(
     clean_height: int = 512,
     top_trim_ratio: float = 0.04,
     bottom_trim_ratio: float = 0.18,
+    source_rights_reviewer: str = "",
 ) -> VideoPhase35PipelineResult:
     profile_exists = character_profile_path(settings, character_id).exists()
     bootstrap = bootstrap_character_from_video(
@@ -73,6 +74,13 @@ def run_video_phase35_pipeline(
         allow_existing_profile=True,
         allow_existing_video=True,
     )
+    if source_rights_reviewer.strip():
+        confirm_character_source_rights(
+            settings=settings,
+            character_id=character_id,
+            reviewer=source_rights_reviewer,
+            notes="Confirmed during Phase 3.5 video pipeline execution.",
+        )
 
     imported = import_video_asset(
         settings=settings,
@@ -170,7 +178,12 @@ def run_video_phase35_pipeline(
         video_id=shots.video_id,
     )
     clean_kohya = None
-    if definition_data.get("definition_status") == "ready":
+    clean_metadata_path = clean_frames.dataset_dir / "metadata.json"
+    clean_metadata = json.loads(clean_metadata_path.read_text(encoding="utf-8")) if clean_metadata_path.is_file() else {}
+    review_completed = bool(clean_metadata.get("review_completed", False)) or not bool(
+        clean_metadata.get("human_review_required", False)
+    )
+    if definition_data.get("definition_status") == "ready" and review_completed:
         clean_kohya = generate_kohya_low_vram_config(
             settings=settings,
             character_id=character_id,
@@ -228,7 +241,7 @@ def run_video_phase35_pipeline(
                     "reviewed_master_reimport_optional",
                     "character_profile_or_master_to_2p5d",
                     "video_domain_dataset_bundle",
-                    "lora_residual_config_after_2p5d",
+                    "lora_residual_config_after_2p5d_and_human_frame_review",
                     "readiness_check",
                     "asset_storage",
                 ],
@@ -304,6 +317,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--clean-height", type=int, default=512, help="Clean training frame height.")
     parser.add_argument("--top-trim", type=float, default=0.04, help="Top safe-area trim ratio.")
     parser.add_argument("--bottom-trim", type=float, default=0.18, help="Bottom subtitle-band trim ratio.")
+    parser.add_argument(
+        "--confirm-source-rights",
+        default="",
+        metavar="REVIEWER",
+        help="Confirm training rights for this source and record the reviewer name.",
+    )
     return parser
 
 
@@ -331,6 +350,7 @@ def main(argv: list[str] | None = None) -> int:
         clean_height=args.clean_height,
         top_trim_ratio=args.top_trim,
         bottom_trim_ratio=args.bottom_trim,
+        source_rights_reviewer=args.confirm_source_rights,
     )
     print(f"Phase 3.5 pipeline manifest: {result.manifest_path}")
     print(f"Character: {result.character_id}")

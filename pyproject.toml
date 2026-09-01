@@ -34,6 +34,9 @@ anime-character-sheet-import = "anime_studio.character_sheet_importer:main"
 anime-dataset-builder-v2 = "anime_studio.dataset_builder_v2:main"
 anime-simple-2p5d = "anime_studio.simple_2p5d_rig:main"
 anime-simple-2p5d-manage = "anime_studio.simple_2p5d_management:main"
+anime-studio-status = "anime_studio.studio_status:main"
+anime-clean-frame-review = "anime_studio.clean_frame_review:main"
+anime-training-diagnostics = "anime_studio.training_diagnostics:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

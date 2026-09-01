@@ -5,7 +5,7 @@ READMEの大枠ロードマップを、現在の実装状況に合わせて更�
 
 ## 現在地
 
-現在は **Phase 3.5: Asset Acquisition & Character Consistency** の初期実装に加えて、その次段となる **Character Sheet Importer + Dataset Builder v2 の入口** までそろった段階です。
+現在は **Phase 1〜7の軽量実装を横断統合しながら、Phase 3.5〜3.6のキャラクター同一性と素材品質を強化している段階** です。
 
 `sample_yonagi` で Phase 3 の実機テストを行い、LoRA + ComfyUI から約2秒の動画生成までは到達しました。
 一方で、**学習素材の準備効率** と **キャラクター同一性の維持** に課題が残ったため、Phase 4〜7 の本格品質調整を深掘りする前に、動画読込・代表フレーム抽出・Character Sheet・2.5D基準づくり・用途別 dataset 化を挟む方針へ切り替えています。
@@ -26,13 +26,17 @@ Phase 4〜7 の実装は引き続き保持します。今後は、
 | Phase 1 | 基盤構築 | 完了 | 6GB VRAM前提の最小Python構成、config、inventory CLIを作成済み |
 | Phase 2 | キャラクター管理 | 完了 | CharacterProfile、asset登録、tag、dataset生成の入口を作成済み |
 | Phase 3 | LoRA学習 | ベースライン完了 | Kohya低VRAM設定、LoRA結果登録、manifest、ComfyUI workflow export、短時間学習と動画生成の基準点を確保 |
-| Phase 3.5 | 2.5D-First Learning Architecture | neural provider入口まで実装 | 動画解析、CharacterProfile/Master由来2.5D、5領域dataset、補完LoRAゲート、4領域CPU trainer、AnimateDiff/Background LoRA job、Camera/Relighting adapter、B-control連携を追加 |
+| Phase 3.5 | 2.5D-First Learning Architecture | neural provider入口まで実装 | 動画解析、Clean Frame人間採用gate、CharacterProfile/Master由来2.5D、5領域dataset、補完LoRAゲート、4領域CPU trainer、AnimateDiff/Background LoRA job、Camera/Relighting adapter、B-control連携を追加 |
 | Phase 3.6 | Character Sheet + Purpose Dataset | 初期実装入り | Character Sheet Importer、Dataset Builder v2 の入口を追加 |
 | Phase 4 | ショット制作 | 完了寄り | Storyboard、ShotEditor、camera/lighting、draft生成、結果採用管理、Unity selected shots連携を作成済み |
 | Phase 5 | 自動化 | 完了寄り | Shot Suggestion AI、RenderQueue、Asset Library連携、ショット単位生成/管理を作成済み |
 | Phase 6 | 拡張 | 完了寄り | voice、lip-sync、SFX、motion、Unity Timeline仮配置、SFX候補採用、motion clip planまで到達 |
 | Phase 7 | 編集/Timeline | 完了寄り | edit timeline manifest、Unity importer、Timeline保護つき再生成、FFmpeg/EDL/FCPXML export、preview plan、revision採用、readiness表示を作成済み |
 | Training Start | ローカル学習開始準備 | 実施済み | training readiness check、sample training smoke、短時間LoRA学習と結果確認まで実施 |
+
+横断機能として、環境、CharacterProfile、2.5D、学習、Storyboard、Phase 6、Timelineの状態と次の作業をまとめる `anime-studio status --open` を追加しています。
+
+横断監査では89テストが成功し、合成MP4によるPhase 3.5全工程、人間採用済みClean Frame dataset gate、Kohya実行ログdiagnostics、ComfyUI Queue実機更新、B-controlからFace Repair入りSimple 2.5D workflowへの接続まで確認済みです。2026-09-01にはIPAdapter Plus Faceと正方形Identity Referenceを追加し、RTX 3050 6GBで実生成まで完走しています。詳細は `docs/test_log_2026-08-25_completion_audit.md` と `docs/test_log_2026-09-01_ipadapter_identity.md` を参照してください。
 
 ## Phase 3.5〜3.6で現在入っているもの
 
@@ -78,6 +82,12 @@ Phase 4〜7 の実装は引き続き保持します。今後は、
    - end-to-end パイプラインの使い方と制約を整理する。
 21. `docs/phase3_6_character_sheet_importer_and_dataset_builder_v2.md`
    - Character Sheet Importer と Dataset Builder v2 の使い方を整理する。
+22. `src/anime_studio/studio_status.py`
+   - 制作環境と全Phaseの主要readinessをHTML / JSONで一覧化する。
+23. `src/anime_studio/clean_frame_review.py`
+   - 動画由来clean frameの番号付きギャラリー、人間採用manifest、reviewed LoRA datasetを生成する。
+24. `src/anime_studio/training_diagnostics.py`
+   - Kohya console、GPU CSV、終了コードからloss傾向、OOM、NaN、高温を診断する。
 
 ## 直近の推奨タスク
 

@@ -73,6 +73,9 @@ def build_simple_2p5d_rig_pipeline(
     lora_name: str = "{{lora_name}}",
     openpose_controlnet_name: str = "{{openpose_controlnet_name}}",
     depth_controlnet_name: str = "{{depth_controlnet_name}}",
+    enable_ipadapter: bool = False,
+    ipadapter_preset: str = "PLUS FACE (portraits)",
+    ipadapter_weight: float = 0.55,
 ) -> Simple2p5DRigResult:
     validate_character_id(character_id)
     source_path = Path(sheet_image)
@@ -126,6 +129,9 @@ def build_simple_2p5d_rig_pipeline(
         lora_name=lora_name,
         openpose_controlnet_name=openpose_controlnet_name,
         depth_controlnet_name=depth_controlnet_name,
+        enable_ipadapter=enable_ipadapter,
+        ipadapter_preset=ipadapter_preset,
+        ipadapter_weight=ipadapter_weight,
     )
     write_json(workflow_path, workflow)
     readiness = {
@@ -151,6 +157,9 @@ def build_simple_2p5d_rig_pipeline(
         lora_name=lora_name,
         openpose_controlnet_name=openpose_controlnet_name,
         depth_controlnet_name=depth_controlnet_name,
+        enable_ipadapter=enable_ipadapter,
+        ipadapter_preset=ipadapter_preset,
+        ipadapter_weight=ipadapter_weight,
         readiness=readiness,
     )
     write_json(control_bundle_path, control_bundle)
@@ -297,6 +306,8 @@ def generate_rig_assets(
     reference = Image.new("RGB", image.size, (255, 255, 255))
     reference.paste(image.convert("RGB"), mask=silhouette)
     reference.save(reference_path)
+    identity_reference_path = controls_dir / "identity_reference.png"
+    build_ipadapter_identity_reference(image, silhouette).save(identity_reference_path)
     part_masks = build_part_masks(silhouette)
     part_records: list[dict[str, Any]] = []
     for part_id, parent_id, z_order, _, pivot in PART_SPECS:
@@ -324,11 +335,15 @@ def generate_rig_assets(
     build_depth_image(silhouette, part_masks).save(depth_path)
     pose_path = controls_dir / "pose.png"
     build_pose_image(silhouette).save(pose_path)
+    face_repair_mask_path = controls_dir / "face_repair_mask.png"
+    build_face_repair_mask(silhouette).save(face_repair_mask_path)
     return {
         "reference": reference_path,
+        "identity_reference": identity_reference_path,
         "silhouette": silhouette_path,
         "depth": depth_path,
         "pose": pose_path,
+        "face_repair_mask": face_repair_mask_path,
         "parts": part_records,
     }
 
@@ -506,6 +521,58 @@ def build_part_masks(silhouette: Image.Image) -> dict[str, Image.Image]:
         )
         result[part_id] = ImageChops.multiply(silhouette, zone_mask)
     return result
+
+
+def build_face_repair_mask(silhouette: Image.Image) -> Image.Image:
+    bbox = silhouette.getbbox()
+    if bbox is None:
+        raise ValueError("Cannot build a face repair mask from an empty silhouette.")
+    left, top, right, bottom = bbox
+    width = max(1, right - left)
+    height = max(1, bottom - top)
+    region = Image.new("L", silhouette.size, 0)
+    draw = ImageDraw.Draw(region)
+    draw.rectangle(
+        (
+            int(left + width * 0.10),
+            top,
+            int(right - width * 0.10),
+            int(top + height * 0.19),
+        ),
+        fill=255,
+    )
+    mask = ImageChops.multiply(silhouette, region)
+    return mask.filter(ImageFilter.MaxFilter(9))
+
+
+def build_ipadapter_identity_reference(
+    image: Image.Image,
+    silhouette: Image.Image,
+    output_size: int = 512,
+) -> Image.Image:
+    bbox = silhouette.getbbox()
+    if bbox is None:
+        raise ValueError("Cannot build an IPAdapter identity reference from an empty silhouette.")
+    left, top, right, bottom = bbox
+    subject_width = max(1, right - left)
+    subject_height = max(1, bottom - top)
+    crop_size = min(
+        image.width,
+        image.height,
+        max(subject_width * 1.45, subject_height * 0.42),
+    )
+    crop_size = max(1, int(round(crop_size)))
+    center_x = (left + right) / 2
+    crop_left = int(round(center_x - crop_size / 2))
+    crop_top = int(round(top - subject_height * 0.04))
+    crop_left = max(0, min(image.width - crop_size, crop_left))
+    crop_top = max(0, min(image.height - crop_size, crop_top))
+    crop_box = (crop_left, crop_top, crop_left + crop_size, crop_top + crop_size)
+    cropped_image = image.convert("RGBA").crop(crop_box)
+    cropped_mask = silhouette.convert("L").crop(crop_box)
+    canvas = Image.new("RGB", cropped_image.size, (255, 255, 255))
+    canvas.paste(cropped_image.convert("RGB"), mask=cropped_mask)
+    return canvas.resize((output_size, output_size), Image.Resampling.LANCZOS)
 
 
 def build_part_record(
@@ -692,9 +759,11 @@ def prepare_comfyui_inputs(
 ) -> tuple[dict[str, str], bool]:
     sources = {
         "reference": primary,
+        "identity_reference": Path(rig_assets["identity_reference"]),
         "pose": Path(rig_assets["pose"]),
         "depth": Path(rig_assets["depth"]),
         "mask": Path(rig_assets["silhouette"]),
+        "face_repair_mask": Path(rig_assets["face_repair_mask"]),
     }
     if comfyui_input_dir in (None, ""):
         return {key: project_relative_path(settings, value) for key, value in sources.items()}, False
@@ -715,8 +784,11 @@ def build_comfyui_workflow(
     lora_name: str,
     openpose_controlnet_name: str,
     depth_controlnet_name: str,
+    enable_ipadapter: bool = False,
+    ipadapter_preset: str = "PLUS FACE (portraits)",
+    ipadapter_weight: float = 0.55,
 ) -> dict[str, Any]:
-    return {
+    workflow: dict[str, Any] = {
         "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": checkpoint_name}},
         "2": {
             "class_type": "LoraLoader",
@@ -770,13 +842,56 @@ def build_comfyui_workflow(
         "13": {
             "class_type": "KSampler",
             "inputs": {
-                "model": ["2", 0], "positive": ["10", 0], "negative": ["10", 1], "latent_image": ["12", 0],
+                "model": ["20", 0] if enable_ipadapter else ["2", 0],
+                "positive": ["10", 0], "negative": ["10", 1], "latent_image": ["12", 0],
                 "seed": 1, "steps": 20, "cfg": 6.5, "sampler_name": "dpmpp_2m", "scheduler": "karras", "denoise": 0.65,
             },
         },
         "14": {"class_type": "VAEDecode", "inputs": {"samples": ["13", 0], "vae": ["1", 2]}},
-        "15": {"class_type": "SaveImage", "inputs": {"images": ["14", 0], "filename_prefix": f"simple_2p5d/{character_id}"}},
+        "15": {
+            "class_type": "LoadImageMask",
+            "inputs": {"image": input_refs["face_repair_mask"], "channel": "red"},
+        },
+        "16": {
+            "class_type": "FeatherMask",
+            "inputs": {"mask": ["15", 0], "left": 12, "top": 12, "right": 12, "bottom": 12},
+        },
+        "17": {
+            "class_type": "ImageCompositeMasked",
+            "inputs": {
+                "destination": ["14", 0], "source": ["11", 0], "x": 0, "y": 0,
+                "resize_source": False, "mask": ["16", 0],
+            },
+        },
+        "18": {
+            "class_type": "SaveImage",
+            "inputs": {"images": ["17", 0], "filename_prefix": f"simple_2p5d/{character_id}_face_repaired"},
+        },
     }
+    if enable_ipadapter:
+        workflow["21"] = {
+            "class_type": "LoadImage",
+            "inputs": {"image": input_refs.get("identity_reference", input_refs["reference"])},
+        }
+        workflow["19"] = {
+            "class_type": "IPAdapterUnifiedLoader",
+            "inputs": {"model": ["2", 0], "preset": ipadapter_preset},
+        }
+        workflow["20"] = {
+            "class_type": "IPAdapterAdvanced",
+            "inputs": {
+                "model": ["19", 0],
+                "ipadapter": ["19", 1],
+                "image": ["21", 0],
+                "weight": ipadapter_weight,
+                "weight_type": "linear",
+                "combine_embeds": "average",
+                "start_at": 0.0,
+                "end_at": 0.85,
+                "embeds_scaling": "V only",
+            },
+        }
+    return workflow
 
 
 def build_control_bundle(
@@ -793,6 +908,9 @@ def build_control_bundle(
     lora_name: str,
     openpose_controlnet_name: str,
     depth_controlnet_name: str,
+    enable_ipadapter: bool,
+    ipadapter_preset: str,
+    ipadapter_weight: float,
     readiness: dict[str, bool],
 ) -> dict[str, Any]:
     return {
@@ -802,18 +920,34 @@ def build_control_bundle(
         "character_id": character_id,
         "definition_2p5d": project_relative_path(settings, definition_path),
         "rig": project_relative_path(settings, rig_path),
-        "identity_reference": project_relative_path(settings, primary),
+        "primary_reference": project_relative_path(settings, primary),
+        "identity_reference": project_relative_path(settings, rig_assets["identity_reference"]),
         "transparent_parts": [item["transparent_image"] for item in rig_assets["parts"]],
         "control_images": {
             "silhouette_mask": project_relative_path(settings, rig_assets["silhouette"]),
             "depth": project_relative_path(settings, rig_assets["depth"]),
             "pose": project_relative_path(settings, rig_assets["pose"]),
+            "face_repair_mask": project_relative_path(settings, rig_assets["face_repair_mask"]),
+            "identity_reference": project_relative_path(settings, rig_assets["identity_reference"]),
             "comfyui_inputs": input_refs,
         },
         "generation_stack": {
             "checkpoint": checkpoint_name,
             "identity": {"provider": "character_lora", "model": lora_name, "strength": 0.7},
+            "reference_adapter": {
+                "provider": "ipadapter_plus" if enable_ipadapter else "disabled",
+                "enabled": enable_ipadapter,
+                "preset": ipadapter_preset,
+                "weight": ipadapter_weight,
+                "end_percent": 0.85,
+                "image": input_refs["identity_reference"],
+            },
             "reference_latent": {"provider": "vae_encode", "image": input_refs["reference"], "denoise": 0.65},
+            "face_repair": {
+                "provider": "reference_face_composite",
+                "mask": input_refs["face_repair_mask"],
+                "feather_pixels": 12,
+            },
             "pose": {"provider": "controlnet_openpose", "model": openpose_controlnet_name, "strength": 1.0},
             "depth": {"provider": "controlnet_depth", "model": depth_controlnet_name, "strength": 0.65},
             "shape": {"provider": "simple_2p5d_rig", "role": "identity and silhouette anchor"},
@@ -915,6 +1049,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lora-name", default="{{lora_name}}")
     parser.add_argument("--openpose-controlnet", default="{{openpose_controlnet_name}}")
     parser.add_argument("--depth-controlnet", default="{{depth_controlnet_name}}")
+    parser.add_argument("--enable-ipadapter", action="store_true")
+    parser.add_argument("--ipadapter-preset", default="PLUS FACE (portraits)")
+    parser.add_argument("--ipadapter-weight", type=float, default=0.55)
     return parser
 
 
@@ -932,6 +1069,9 @@ def main(argv: list[str] | None = None) -> int:
         lora_name=args.lora_name,
         openpose_controlnet_name=args.openpose_controlnet,
         depth_controlnet_name=args.depth_controlnet,
+        enable_ipadapter=args.enable_ipadapter,
+        ipadapter_preset=args.ipadapter_preset,
+        ipadapter_weight=args.ipadapter_weight,
     )
     print(f"Pipeline manifest: {result.pipeline_manifest_path}")
     print(f"Character master: {result.master_manifest_path}")

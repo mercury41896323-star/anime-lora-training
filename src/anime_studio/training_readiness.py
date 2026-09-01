@@ -51,6 +51,8 @@ def check_training_readiness(
     profile = None
     if profile_path.exists():
         profile = load_character_profile(settings, character_id)
+        if not bool(profile.profile_data.get("training", {}).get("source_rights_confirmed", False)):
+            issues.append(issue("source_rights_unconfirmed", "Confirm that the source material may be used for training."))
     else:
         issues.append(issue("missing_profile", f"CharacterProfile is missing: {profile_path}"))
 
@@ -78,6 +80,13 @@ def check_training_readiness(
     dataset_images = list((resolved_dataset_dir / "images").glob("*")) if (resolved_dataset_dir / "images").exists() else []
     if not dataset_metadata.exists():
         warnings.append(issue("missing_dataset_metadata", f"Dataset metadata is missing: {dataset_metadata}"))
+    else:
+        try:
+            metadata = json.loads(dataset_metadata.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError):
+            metadata = {}
+        if bool(metadata.get("human_review_required", False)) and not bool(metadata.get("review_completed", False)):
+            issues.append(issue("clean_frame_review_required", "Complete human review before using clean video frames for training."))
     if image_paths and not dataset_images:
         warnings.append(issue("missing_dataset_images", f"Dataset images are not built yet: {resolved_dataset_dir / 'images'}"))
 
@@ -102,6 +111,10 @@ def check_training_readiness(
     missing_kohya = [path for path in required_kohya if not path.exists()]
     if missing_kohya:
         warnings.append(issue("missing_kohya_config", f"{len(missing_kohya)} Kohya low-VRAM files are missing."))
+    else:
+        dataset_config_text = (kohya_dir / "dataset.toml").read_text(encoding="utf-8-sig")
+        if str(resolved_dataset_dir) not in dataset_config_text:
+            issues.append(issue("kohya_dataset_mismatch", "Kohya dataset.toml does not reference the selected reviewed dataset."))
 
     manifest_path = normalize_readiness_path(settings, character_id, output_path)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -230,6 +243,12 @@ def next_actions(issues: list[dict[str, str]], warnings: list[dict[str, str]]) -
         actions.append("Generate Kohya low-VRAM config files.")
     if "missing_ready_2p5d_definition" in codes:
         actions.append("Create or review the Character Master Asset, then generate a ready 2.5D definition before LoRA training.")
+    if "source_rights_unconfirmed" in codes:
+        actions.append("Confirm source rights in the CharacterProfile before training.")
+    if "clean_frame_review_required" in codes:
+        actions.append("Review clean video frames and build the reviewed dataset.")
+    if "kohya_dataset_mismatch" in codes:
+        actions.append("Regenerate Kohya low-VRAM config for the selected reviewed dataset.")
     if not actions:
         actions.append("Ready for a small local LoRA training run.")
     return actions
@@ -286,6 +305,8 @@ def build_parser() -> argparse.ArgumentParser:
     readiness.add_argument("--character-id", required=True, help="Character id.")
     readiness.add_argument("--min-images", type=int, default=DEFAULT_MIN_IMAGES, help="Minimum recommended image count.")
     readiness.add_argument("--output", default=None, help="Optional readiness manifest path.")
+    readiness.add_argument("--dataset-dir", default=None, help="Optional reviewed dataset directory.")
+    readiness.add_argument("--require-2p5d", action="store_true", help="Require a ready 2.5D Definition.")
     smoke = subparsers.add_parser("smoke", help="Run dataset -> Kohya config -> readiness without launching training.")
     smoke.add_argument("--character-id", required=True, help="Character id.")
     smoke.add_argument("--pretrained-model", required=True, help="SD base model path or id for generated config.")
@@ -308,6 +329,8 @@ def main(argv: list[str] | None = None) -> int:
             character_id=args.character_id,
             min_images=args.min_images,
             output_path=args.output,
+            dataset_dir=args.dataset_dir,
+            require_2p5d=args.require_2p5d,
         )
         print(f"Wrote training readiness: {result.manifest_path}")
         print(f"Ready: {result.ready}")

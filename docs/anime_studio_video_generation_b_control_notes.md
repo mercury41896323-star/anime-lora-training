@@ -64,6 +64,7 @@ B. ControlNet / OpenPose / Reference / IPAdapter / AnimateDiff style control
    - Shot / Camera / Lighting / Motion cue / Selected Result をもとに
    - `b_control_manifest.json` を生成
    - ComfyUI workflow の `meta` と prompt に B-control 情報を差し込む
+   - 生成readiness済みのSimple 2.5D workflowがあれば、OpenPose / Depth / Face Repair Nodeを含む実workflowとしてShotへ展開する
 
 2. `manifests/storyboards/<story_id>/b_control_manifest.json`
    - shotごとの face direction
@@ -78,9 +79,11 @@ B. ControlNet / OpenPose / Reference / IPAdapter / AnimateDiff style control
 
 ## 実装上の位置づけ
 
-いまの B-control は **最終的な ControlNet 実行エンジンそのもの** ではありません。
+生成readiness済みのSimple 2.5Dキャラクターでは、B-controlは **ControlNetとFace Repairを実行するworkflow** まで接続済みです。
 
-先に次を固定するための段階です。
+Simple 2.5D workflowが未準備、または明示templateを指定した場合は、従来どおりprompt / metadata中心の軽量fallbackになります。`storyboard_workflows.json` の `workflow_modes` で判別できます。
+
+引き続き次を固定・拡張する段階です。
 
 - Shotごとの制御情報 schema
 - ComfyUI export 時の metadata 受け渡し
@@ -97,7 +100,7 @@ B. ControlNet / OpenPose / Reference / IPAdapter / AnimateDiff style control
 
 ## 次の強化候補
 
-- 実ControlNetノードへの直接入力
-- OpenPose guide画像の自動生成
+- ShotごとのPose / Depth補助画像の自動更新
+- IPAdapter / Reference専用Nodeへの直接入力
 - face turn transition 専用の中割生成workflow
 - motion dataset と B-control を使った連続生成評価

@@ -90,6 +90,14 @@ Shot の `prompt`、`camera`、`lighting` は positive prompt に追記されま
 `negative_prompt`、`seed`、`width`、`height`、`steps` が設定されている場合は、ComfyUI workflow の該当ノードにも反映されます。
 `camera_work.json` と `lighting_setups.json` の内容も positive prompt と workflow metadata に反映されます。
 
+`--b-control`を付け、キャラクターのSimple 2.5D generation readinessが通っている場合は、承認済みOpenPose / Depth / Face Repair入りworkflowを各Shotへ自動展開します。通常画像と`_face_repaired`画像は別名で保存されます。
+
+```powershell
+python -m anime_studio.cli storyboard export-comfyui --story-id pilot_scene --b-control
+```
+
+Simple 2.5D workflowが未準備の場合はLoRA txt2imgへfallbackし、方式は`storyboard_workflows.json`の`workflow_modes`に記録されます。
+
 ```powershell
 python -m anime_studio.cli storyboard export-comfyui --story-id pilot_scene
 ```

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, replace
+from datetime import datetime, timezone
 import json
 import re
 from pathlib import Path
@@ -210,6 +211,28 @@ def save_character_profile(settings: AppSettings, profile: CharacterProfile) -> 
         encoding="utf-8",
     )
     return profile_path
+
+
+def confirm_character_source_rights(
+    settings: AppSettings,
+    character_id: str,
+    reviewer: str,
+    notes: str = "",
+) -> Path:
+    reviewer_name = reviewer.strip()
+    if not reviewer_name:
+        raise ValueError("reviewer is required to confirm source rights.")
+    profile = load_character_profile(settings, character_id)
+    profile_data = dict(profile.profile_data)
+    training = dict(profile_data.get("training", {}))
+    training["source_rights_confirmed"] = True
+    training["source_rights_review"] = {
+        "reviewer": reviewer_name,
+        "confirmed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "notes": notes.strip(),
+    }
+    profile_data["training"] = training
+    return save_character_profile(settings, replace(profile, profile_data=profile_data))
 
 
 def link_character_source_asset(

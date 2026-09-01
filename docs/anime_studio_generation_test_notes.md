@@ -1,5 +1,7 @@
 # Anime Studio LoRA Generation Test Notes
 
+> この文書は初期生成テスト時点の履歴です。「未実装」の記述は当時の状態を示します。現在の実装状況は `docs/roadmap_status.md` と `anime-studio status --open` を参照してください。
+
 Date: 2026-08-16
 
 This note records the current ComfyUI generation test results for the Anime Studio / anime-lora-training project.

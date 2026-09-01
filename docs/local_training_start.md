@@ -9,6 +9,21 @@ RTX 3050 6GB VRAMを前提に、いきなり長時間学習を回さず、まず
 - 学習用画像が `assets/processed/characters/<character_id>/sources/image/` または `frames/` にある。
 - 自動タグ付け後に、必要なら `.tags.json` を手動修正できる。
 - Kohya_ss / sd-scriptsの場所と、SD1.5系base modelの場所を把握している。
+- 素材の作成者・ライセンス・学習利用可否を確認できる。
+
+## 0. 素材利用権の確認
+
+確認できた場合だけ、確認者名をCharacterProfileへ記録します。
+
+```powershell
+python -m anime_studio.cli character confirm-source-rights `
+  --id sample_hero `
+  --reviewer "自分の名前" `
+  --notes "自作素材" `
+  --confirm
+```
+
+未確認のままでもローカル生成テストはできますが、LoRA学習readinessは`source_rights_unconfirmed`で停止します。
 
 ## 1. 学習準備チェック
 
@@ -69,6 +84,8 @@ datasets/lora/sample_hero/
 このsmoke workflowは、Kohya学習そのものは起動しません。
 生成された `run_train.ps1` を人間が確認してから、最初の短い学習を開始します。
 
+新しく生成した`run_train.ps1`はconsole、GPU、終了コードを`outputs/logs/<character_id>/`へ保存します。終了後は`docs/training_diagnostics.md`の手順でOOM、NaN、loss、温度を確認します。
+
 ## 3. Video to Training Smoke
 
 Phase 3.5 の入口として、動画読込から学習準備までを一気に通す workflow も使えます。
@@ -119,6 +136,8 @@ manifests/training/sample_yonagi/video_training_smoke.json
 ## 5. 開始前チェック
 
 - `training_readiness.json` の `ready` が `true`
+- 動画由来画像は`video_<video_id>_reviewed` datasetを使用している
+- `dataset.toml`が同じreviewed datasetを参照している
 - captionが空ではない
 - trigger tagがcaptionに含まれている
 - `dataset.toml` の画像フォルダが存在する
@@ -127,7 +146,5 @@ manifests/training/sample_yonagi/video_training_smoke.json
 
 ## 次に作る候補
 
-- 学習ログをCharacterProfileへ自動紐づけする。
-- 最初のサンプル生成結果をLoRA artifactへ記録する。
-- 失敗時のVRAM/設定診断を追加する。
-- 動画からの代表フレーム抽出を、類似除外ありのSamplerへ強化する。
+- 複数LoRAの比較画像を同一seedで自動生成する。
+- 学習停止条件と過学習候補の診断を追加する。

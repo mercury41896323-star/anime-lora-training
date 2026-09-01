@@ -57,6 +57,9 @@ class KohyaConfigTest(unittest.TestCase):
             self.assertIn("gradient_checkpointing", training_toml)
             self.assertIn("& 'accelerate' 'launch'", run_script)
             self.assertIn("'--dataset_config'", run_script)
+            self.assertIn("Tee-Object -FilePath $consoleLog", run_script)
+            self.assertIn("nvidia-smi --query-gpu", run_script)
+            self.assertIn("training_result_$runId.json", run_script)
 
             profile = load_character_profile(settings, "sample_hero")
             self.assertEqual(len(profile.lora_artifacts), 1)

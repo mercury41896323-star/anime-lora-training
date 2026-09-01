@@ -19,6 +19,7 @@ from anime_studio.simple_2p5d_management import (
     bind_generation_lora,
     check_simple_2p5d_generation_readiness,
     inspect_simple_2p5d_rig,
+    refresh_generation_workflow,
 )
 from anime_studio.simple_2p5d_rig import build_simple_2p5d_rig_pipeline
 
@@ -71,6 +72,11 @@ class Simple2p5DManagementTest(unittest.TestCase):
                 comfyui_lora_dir=lora_dir,
                 reviewer="unit_test",
             )
+            refreshed_workflow = refresh_generation_workflow(
+                settings, "managed_hero", input_dir, enable_ipadapter=True, ipadapter_weight=0.5
+            )
+            self.assertTrue(refreshed_workflow.exists())
+            self.assertEqual(inspect_simple_2p5d_rig(settings, "managed_hero").status, "approved")
 
             ready = check_simple_2p5d_generation_readiness(
                 settings, "managed_hero", controlnet_dir, lora_dir, input_dir
@@ -84,6 +90,16 @@ class Simple2p5DManagementTest(unittest.TestCase):
             self.assertEqual(readiness["review_status"], "approved")
             self.assertEqual(workflow["2"]["inputs"]["lora_name"], "managed_hero.safetensors")
             self.assertTrue(workflow["3"]["inputs"]["text"].startswith("managed_hero_token,"))
+            self.assertEqual(workflow["17"]["class_type"], "ImageCompositeMasked")
+            self.assertEqual(workflow["20"]["class_type"], "IPAdapterAdvanced")
+            self.assertEqual(workflow["13"]["inputs"]["model"], ["20", 0])
+            bundle = json.loads(
+                (root / "assets" / "processed" / "characters" / "managed_hero" / "simple_2p5d_rig" / "control_bundle.json").read_text(encoding="utf-8")
+            )
+            self.assertTrue(bundle["generation_stack"]["reference_adapter"]["enabled"])
+            self.assertEqual(bundle["generation_stack"]["reference_adapter"]["weight"], 0.5)
+            self.assertTrue((input_dir / "anime_studio" / "managed_hero" / "face_repair_mask.png").exists())
+            self.assertTrue((input_dir / "anime_studio" / "managed_hero" / "identity_reference.png").exists())
             self.assertEqual(profile.profile_data["generation"]["selected_lora"], "managed_hero.safetensors")
 
     def test_blocks_approval_when_silhouette_touches_canvas_edges(self) -> None:

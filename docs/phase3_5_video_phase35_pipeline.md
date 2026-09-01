@@ -19,8 +19,8 @@
 9. reviewed / master があれば再取込する
 10. CharacterProfileまたはCharacter Master Assetから2.5D Definitionを生成する
 11. character・motion・camera・background・lighting datasetを保存する
-12. readyな2.5D Definitionがある場合だけKohya低VRAM設定を生成する
-13. readiness を確認する
+12. readyな2.5D Definitionと人間確認済みdatasetがある場合だけKohya低VRAM設定を生成する
+13. clean frameの人間確認が必要なことをreadinessで通知する
 14. B-control export時にDefinitionを生成・動画制御へ渡す
 
 ## 2. 60〜300秒動画への最適化
@@ -32,7 +32,7 @@
 - 長すぎるShotを避けるために `max_shot_seconds` で仮分割する
 - Shot単位で代表フレームを選び、重複寄りのフレームを落とす
 - sampled frame 専用の軽量 dataset を別に書き出す
-- clean frame datasetだけを最終Kohya設定へ渡す
+- 人間が採用したreviewed clean frame datasetだけを最終Kohya設定へ渡す
 - 2.5D Definition完成前は最終Kohya設定を生成しない
 
 ## 3. 実行例
@@ -47,8 +47,13 @@ anime-video-phase35 `
   --requested-fps 2.0 `
   --target-max-frames 240 `
   --provider baseline `
+  --confirm-source-rights "自分の名前" `
   --source-label "episode01"
 ```
+
+`--confirm-source-rights`は、素材の学習利用権を確認できた場合だけ指定します。省略時は解析・2.5D生成まで進みますが、最終学習readinessは停止します。
+
+初回実行のreadinessは、clean frameが未確認のため`clean_frame_review_required`で停止します。`docs/clean_frame_review.md`の手順で採用画像を確定し、reviewed dataset向けKohya設定を再生成した後に最終readinessを確認します。
 
 reviewed / master まで続ける場合:
 
@@ -97,7 +102,8 @@ datasets/video_learning/<character_id>/<video_id>/video_learning_bundle.json
 - 2.5D Definition は実画像anchorを持つcontrol manifestであり、rigそのものではない
 - reviewed / master の品質判断は人間前提
 - 文字除外はsafe-area Cropとタグ除外であり、OCR完全保証ではない
-- motion / camera / background / lighting はdataset保存までで、専用trainerは未実装
+- motion / camera / background / lighting はdataset保存、CPU軽量trainer、外部ニューラルprovider job作成まで実装済み
+- AnimateDiff等の重い公式学習は6GB VRAMでは外部環境または分割実行を前提とする
 
 ## 7. 次の強化候補
 

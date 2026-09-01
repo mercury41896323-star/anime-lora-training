@@ -118,7 +118,7 @@ def generate_kohya_low_vram_config(
         render_training_toml(training_payload),
         encoding="utf-8",
     )
-    run_script.write_text(render_powershell_script(command), encoding="utf-8")
+    run_script.write_text(render_powershell_script(command, logging_dir), encoding="utf-8")
     registry = link_kohya_config(
         settings=settings,
         character_id=character_id,
@@ -292,14 +292,38 @@ def render_training_toml(payload: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def render_powershell_script(command: list[str]) -> str:
+def render_powershell_script(command: list[str], logging_dir: Path) -> str:
     quoted = "& " + " ".join(powershell_quote(part) for part in command)
     return "\n".join(
         [
             "$ErrorActionPreference = \"Stop\"",
+            f"$logDir = {powershell_quote(str(logging_dir))}",
+            "$runId = Get-Date -Format 'yyyyMMdd_HHmmss'",
+            "$consoleLog = Join-Path $logDir \"kohya_$runId.log\"",
+            "$gpuLog = Join-Path $logDir \"gpu_$runId.csv\"",
+            "$resultLog = Join-Path $logDir \"training_result_$runId.json\"",
+            "New-Item -ItemType Directory -Path $logDir -Force | Out-Null",
+            "$startedAt = (Get-Date).ToUniversalTime().ToString('o')",
+            "$trainingExitCode = 1",
             "",
             "# Review train_low_vram.toml before running this script.",
-            quoted,
+            "if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {",
+            "    'stage,timestamp,name,memory_used_mib,memory_total_mib,utilization_percent,temperature_c' | Set-Content -LiteralPath $gpuLog -Encoding utf8",
+            "    $gpuStart = nvidia-smi --query-gpu=timestamp,name,memory.used,memory.total,utilization.gpu,temperature.gpu --format=csv,noheader,nounits",
+            "    \"start,$gpuStart\" | Add-Content -LiteralPath $gpuLog -Encoding utf8",
+            "}",
+            "try {",
+            f"    {quoted} 2>&1 | Tee-Object -FilePath $consoleLog",
+            "    $trainingExitCode = $LASTEXITCODE",
+            "} finally {",
+            "    $endedAt = (Get-Date).ToUniversalTime().ToString('o')",
+            "    if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {",
+            "        $gpuEnd = nvidia-smi --query-gpu=timestamp,name,memory.used,memory.total,utilization.gpu,temperature.gpu --format=csv,noheader,nounits",
+            "        \"end,$gpuEnd\" | Add-Content -LiteralPath $gpuLog -Encoding utf8",
+            "    }",
+            "    [ordered]@{ run_id = $runId; started_at = $startedAt; ended_at = $endedAt; exit_code = $trainingExitCode; console_log = $consoleLog; gpu_log = $gpuLog } | ConvertTo-Json | Set-Content -LiteralPath $resultLog -Encoding utf8",
+            "}",
+            "if ($trainingExitCode -ne 0) { exit $trainingExitCode }",
             "",
         ]
     )

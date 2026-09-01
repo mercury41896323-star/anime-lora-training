@@ -81,11 +81,9 @@ manifests/characters/<character_id>/character_sheet/<video_id>_completeness.json
 
 ## 5. いまの制約
 
-- 顔向きの自動分類はまだない
-- 表情名の自動推定はまだない
-- 全身 / バストアップの自動判定はまだない
+- 顔向き・表情・全身 / バストアップ分類は heuristic のため、人間の確認が必要
 - Back View / Costume Detail / Hair Detail / Color Palette は自動で埋めない
-- 外部レビュー後の re-import はまだ未実装
+- 外部レビュー後の画像は `anime-character-master` で reviewed / masterとして再取込可能
 
 ## 6. この機能の意味
 

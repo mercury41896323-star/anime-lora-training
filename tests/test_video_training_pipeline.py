@@ -10,7 +10,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from anime_studio.character_profile import create_character_profile
+from anime_studio.character_profile import confirm_character_source_rights, create_character_profile
 from anime_studio.settings import load_settings
 from anime_studio.video_training_pipeline import run_video_training_smoke
 
@@ -21,6 +21,7 @@ class VideoTrainingPipelineTest(unittest.TestCase):
             root = Path(temp_dir)
             settings = write_settings(root)
             create_character_profile(settings, "sample_yonagi", "Sample Yonagi", trigger_tags=["sample_yonagi"])
+            confirm_character_source_rights(settings, "sample_yonagi", "test reviewer")
 
             source_video = root / "assets" / "raw" / "scene 001.mp4"
             source_video.parent.mkdir(parents=True)

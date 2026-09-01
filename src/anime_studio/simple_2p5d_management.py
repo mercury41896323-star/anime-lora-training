@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 import hashlib
 import json
 from pathlib import Path
+import shutil
 from typing import Any
 
 from PIL import Image
@@ -12,7 +13,15 @@ from PIL import Image
 from .character_profile import load_character_profile, save_character_profile, validate_character_id
 from .lora_registry import project_relative_path, utc_timestamp
 from .settings import AppSettings, load_settings
-from .simple_2p5d_rig import build_readiness_issues, generation_readiness_status, read_json, write_json
+from .simple_2p5d_rig import (
+    build_comfyui_workflow,
+    build_face_repair_mask,
+    build_ipadapter_identity_reference,
+    build_readiness_issues,
+    generation_readiness_status,
+    read_json,
+    write_json,
+)
 
 
 REVIEW_MANIFEST_TYPE = "simple_2p5d_rig_review"
@@ -244,6 +253,98 @@ def bind_generation_lora(
     return paths["bundle"]
 
 
+def refresh_generation_workflow(
+    settings: AppSettings,
+    character_id: str,
+    comfyui_input_dir: str | Path,
+    enable_ipadapter: bool | None = None,
+    ipadapter_preset: str | None = None,
+    ipadapter_weight: float | None = None,
+) -> Path:
+    validate_character_id(character_id)
+    paths = character_paths(settings, character_id)
+    rig = read_json(paths["rig"])
+    bundle = read_json(paths["bundle"])
+    silhouette_path = resolve_project_path(settings, str(rig.get("silhouette_mask", "")))
+    if not silhouette_path.is_file():
+        raise FileNotFoundError(f"Silhouette mask does not exist: {silhouette_path}")
+
+    face_mask_path = paths["rig"].parent / "controls" / "face_repair_mask.png"
+    face_mask_path.parent.mkdir(parents=True, exist_ok=True)
+    with Image.open(silhouette_path) as source:
+        build_face_repair_mask(source.convert("L")).save(face_mask_path)
+
+    reference_path = resolve_project_path(settings, str(rig.get("primary_reference", "")))
+    if not reference_path.is_file():
+        raise FileNotFoundError(f"Primary reference does not exist: {reference_path}")
+    identity_reference_path = paths["rig"].parent / "controls" / "identity_reference.png"
+    with Image.open(reference_path) as reference_source, Image.open(silhouette_path) as silhouette_source:
+        build_ipadapter_identity_reference(
+            reference_source.convert("RGBA"), silhouette_source.convert("L")
+        ).save(identity_reference_path)
+
+    target_root = Path(comfyui_input_dir) / "anime_studio" / character_id
+    target_root.mkdir(parents=True, exist_ok=True)
+    target_mask = target_root / "face_repair_mask.png"
+    shutil.copy2(face_mask_path, target_mask)
+    target_identity = target_root / "identity_reference.png"
+    shutil.copy2(identity_reference_path, target_identity)
+
+    control_images = dict(bundle.get("control_images", {}))
+    input_refs = dict(control_images.get("comfyui_inputs", {}))
+    input_refs["face_repair_mask"] = f"anime_studio/{character_id}/face_repair_mask.png"
+    input_refs["identity_reference"] = f"anime_studio/{character_id}/identity_reference.png"
+    required_inputs = {"reference", "pose", "depth", "mask", "face_repair_mask"}
+    missing_inputs = sorted(required_inputs - set(input_refs))
+    if missing_inputs:
+        raise ValueError(f"Control bundle is missing ComfyUI inputs: {', '.join(missing_inputs)}")
+
+    stack = dict(bundle.get("generation_stack", {}))
+    identity = dict(stack.get("identity", {}))
+    reference_adapter = dict(stack.get("reference_adapter", {}))
+    use_ipadapter = bool(reference_adapter.get("enabled", False)) if enable_ipadapter is None else enable_ipadapter
+    selected_preset = ipadapter_preset or str(reference_adapter.get("preset", "PLUS FACE (portraits)"))
+    selected_weight = (
+        float(reference_adapter.get("weight", 0.55)) if ipadapter_weight is None else ipadapter_weight
+    )
+    workflow = build_comfyui_workflow(
+        character_id=character_id,
+        input_refs=input_refs,
+        checkpoint_name=str(stack.get("checkpoint", "sd15.safetensors")),
+        lora_name=str(identity.get("model", "{{lora_name}}")),
+        openpose_controlnet_name=str(dict(stack.get("pose", {})).get("model", "{{openpose_controlnet_name}}")),
+        depth_controlnet_name=str(dict(stack.get("depth", {})).get("model", "{{depth_controlnet_name}}")),
+        enable_ipadapter=use_ipadapter,
+        ipadapter_preset=selected_preset,
+        ipadapter_weight=selected_weight,
+    )
+    trigger_tag = str(identity.get("trigger_tag", "")).strip()
+    if trigger_tag and trigger_tag != character_id:
+        workflow["3"]["inputs"]["text"] = f"{trigger_tag}, {workflow['3']['inputs']['text']}"
+    write_json(paths["workflow"], workflow)
+
+    control_images["face_repair_mask"] = project_relative_path(settings, face_mask_path)
+    control_images["identity_reference"] = project_relative_path(settings, identity_reference_path)
+    control_images["comfyui_inputs"] = input_refs
+    bundle["control_images"] = control_images
+    stack["face_repair"] = {
+        "provider": "reference_face_composite",
+        "mask": input_refs["face_repair_mask"],
+        "feather_pixels": 12,
+    }
+    stack["reference_adapter"] = {
+        "provider": "ipadapter_plus" if use_ipadapter else "disabled",
+        "enabled": use_ipadapter,
+        "preset": selected_preset,
+        "weight": selected_weight,
+        "end_percent": 0.85,
+        "image": input_refs["identity_reference"],
+    }
+    bundle["generation_stack"] = stack
+    write_json(paths["bundle"], bundle)
+    return paths["workflow"]
+
+
 def check_simple_2p5d_generation_readiness(
     settings: AppSettings,
     character_id: str,
@@ -271,7 +372,7 @@ def check_simple_2p5d_generation_readiness(
     check_model(Path(comfyui_lora_dir), lora, "lora", issues)
     check_model(Path(comfyui_controlnet_dir), openpose, "openpose_controlnet", issues)
     check_model(Path(comfyui_controlnet_dir), depth, "depth_controlnet", issues)
-    for name in ("reference.png", "pose.png", "depth.png", "mask.png"):
+    for name in ("reference.png", "pose.png", "depth.png", "mask.png", "face_repair_mask.png"):
         path = Path(comfyui_input_dir) / "anime_studio" / character_id / name
         if not path.is_file():
             issues.append(issue("missing_comfyui_input", str(path)))
@@ -426,7 +527,7 @@ def readiness_actions(issues: list[dict[str, str]]) -> list[str]:
     if any("controlnet" in code for code in codes):
         actions.append("Install or select the matching OpenPose and Depth ControlNet models.")
     if "missing_comfyui_input" in codes:
-        actions.append("Copy reference, pose, depth, and mask images into ComfyUI input.")
+        actions.append("Copy reference, pose, depth, mask, and face repair mask images into ComfyUI input.")
     if not actions:
         actions.append("Ready to submit the Simple 2.5D workflow to ComfyUI.")
     return actions
@@ -435,7 +536,7 @@ def readiness_actions(issues: list[dict[str, str]]) -> list[str]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="anime-simple-2p5d-manage",
-        description="Inspect, approve, bind a LoRA, and validate Simple 2.5D generation readiness.",
+        description="Inspect, approve, refresh, bind a LoRA, and validate Simple 2.5D generation readiness.",
     )
     parser.add_argument("--config", default="config/local_6gb.json")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -451,6 +552,12 @@ def build_parser() -> argparse.ArgumentParser:
     bind.add_argument("--trigger-tag", required=True)
     bind.add_argument("--comfyui-lora-dir", required=True)
     bind.add_argument("--reviewer", required=True)
+    refresh = subparsers.add_parser("refresh-workflow")
+    refresh.add_argument("--character-id", required=True)
+    refresh.add_argument("--comfyui-input-dir", required=True)
+    refresh.add_argument("--enable-ipadapter", action=argparse.BooleanOptionalAction, default=None)
+    refresh.add_argument("--ipadapter-preset", default=None)
+    refresh.add_argument("--ipadapter-weight", type=float, default=None)
     readiness = subparsers.add_parser("readiness")
     readiness.add_argument("--character-id", required=True)
     readiness.add_argument("--comfyui-controlnet-dir", required=True)
@@ -480,6 +587,17 @@ def main(argv: list[str] | None = None) -> int:
             args.comfyui_lora_dir, args.reviewer,
         )
         print(f"Control bundle: {path}")
+        return 0
+    if args.command == "refresh-workflow":
+        path = refresh_generation_workflow(
+            settings,
+            args.character_id,
+            args.comfyui_input_dir,
+            enable_ipadapter=args.enable_ipadapter,
+            ipadapter_preset=args.ipadapter_preset,
+            ipadapter_weight=args.ipadapter_weight,
+        )
+        print(f"Refreshed workflow: {path}")
         return 0
     if args.command == "readiness":
         result = check_simple_2p5d_generation_readiness(
