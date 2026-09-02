@@ -59,6 +59,21 @@ anime-simple-2p5d `
   --depth-controlnet "control_v11f1p_sd15_depth_fp16.safetensors"
 ```
 
+表情一覧や顔角度一覧から高解像度の顔参照を使う場合は、元画像と正規化Cropを指定します。Cropは`left,top,right,bottom`を0〜1で指定し、見出し文字を含めない領域を選びます。
+
+```powershell
+anime-simple-2p5d `
+  --character-id chiyoko `
+  --display-name "Chiyoko" `
+  --sheet "C:\path\to\character_sheet.jpg" `
+  --identity-reference "C:\path\to\expression_sheet.png" `
+  --identity-crop "0,0.04,0.166667,0.333333" `
+  --comfyui-input-dir "C:\path\to\ComfyUI-Shared\input" `
+  --enable-ipadapter
+```
+
+選択領域は`identity_source_crop.png`、IPAdapter用正方形画像は`identity_reference.png`、全身位置へ整列した自動顔修復元は`face_reference.png`として保存されます。外部顔参照を指定しない既存処理は従来どおり全身Referenceから生成します。
+
 RTX 3050 6GB環境では、ComfyUI作者が公開しているFP16 safetensors版を使用します。2026-08-23のローカル確認では、両モデルをComfyUI標準`ControlNetLoader`が認識しています。
 
 ## 生成順序

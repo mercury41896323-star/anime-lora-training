@@ -15,6 +15,7 @@ from .lora_registry import project_relative_path, utc_timestamp
 from .settings import AppSettings, load_settings
 from .simple_2p5d_rig import (
     build_comfyui_workflow,
+    build_face_reference,
     build_face_repair_mask,
     build_ipadapter_identity_reference,
     build_readiness_issues,
@@ -265,6 +266,7 @@ def refresh_generation_workflow(
     paths = character_paths(settings, character_id)
     rig = read_json(paths["rig"])
     bundle = read_json(paths["bundle"])
+    control_images = dict(bundle.get("control_images", {}))
     silhouette_path = resolve_project_path(settings, str(rig.get("silhouette_mask", "")))
     if not silhouette_path.is_file():
         raise FileNotFoundError(f"Silhouette mask does not exist: {silhouette_path}")
@@ -277,11 +279,26 @@ def refresh_generation_workflow(
     reference_path = resolve_project_path(settings, str(rig.get("primary_reference", "")))
     if not reference_path.is_file():
         raise FileNotFoundError(f"Primary reference does not exist: {reference_path}")
-    identity_reference_path = paths["rig"].parent / "controls" / "identity_reference.png"
-    with Image.open(reference_path) as reference_source, Image.open(silhouette_path) as silhouette_source:
-        build_ipadapter_identity_reference(
-            reference_source.convert("RGBA"), silhouette_source.convert("L")
-        ).save(identity_reference_path)
+    identity_reference_path = resolve_project_path(
+        settings,
+        str(control_images.get("identity_reference", paths["rig"].parent / "controls" / "identity_reference.png")),
+    )
+    if not identity_reference_path.is_file():
+        identity_reference_path = paths["rig"].parent / "controls" / "identity_reference.png"
+        with Image.open(reference_path) as reference_source, Image.open(silhouette_path) as silhouette_source:
+            build_ipadapter_identity_reference(
+                reference_source.convert("RGBA"), silhouette_source.convert("L")
+            ).save(identity_reference_path)
+    face_reference_path = resolve_project_path(
+        settings,
+        str(control_images.get("face_reference", paths["rig"].parent / "controls" / "face_reference.png")),
+    )
+    if not face_reference_path.is_file():
+        face_reference_path = paths["rig"].parent / "controls" / "face_reference.png"
+        with Image.open(reference_path) as reference_source, Image.open(identity_reference_path) as identity_source, Image.open(face_mask_path) as mask_source:
+            build_face_reference(
+                reference_source.convert("RGB"), identity_source.convert("RGB"), mask_source.convert("L")
+            ).save(face_reference_path)
 
     target_root = Path(comfyui_input_dir) / "anime_studio" / character_id
     target_root.mkdir(parents=True, exist_ok=True)
@@ -289,12 +306,14 @@ def refresh_generation_workflow(
     shutil.copy2(face_mask_path, target_mask)
     target_identity = target_root / "identity_reference.png"
     shutil.copy2(identity_reference_path, target_identity)
+    target_face_reference = target_root / "face_reference.png"
+    shutil.copy2(face_reference_path, target_face_reference)
 
-    control_images = dict(bundle.get("control_images", {}))
     input_refs = dict(control_images.get("comfyui_inputs", {}))
     input_refs["face_repair_mask"] = f"anime_studio/{character_id}/face_repair_mask.png"
     input_refs["identity_reference"] = f"anime_studio/{character_id}/identity_reference.png"
-    required_inputs = {"reference", "pose", "depth", "mask", "face_repair_mask"}
+    input_refs["face_reference"] = f"anime_studio/{character_id}/face_reference.png"
+    required_inputs = {"reference", "pose", "depth", "mask", "face_repair_mask", "face_reference"}
     missing_inputs = sorted(required_inputs - set(input_refs))
     if missing_inputs:
         raise ValueError(f"Control bundle is missing ComfyUI inputs: {', '.join(missing_inputs)}")
@@ -307,6 +326,12 @@ def refresh_generation_workflow(
     selected_weight = (
         float(reference_adapter.get("weight", 0.55)) if ipadapter_weight is None else ipadapter_weight
     )
+    trigger_tag = str(identity.get("trigger_tag", "")).strip()
+    if not trigger_tag:
+        trigger_tag = str(dict(bundle.get("lora_binding", {})).get("trigger_tag", "")).strip()
+    if not trigger_tag:
+        profile = load_character_profile(settings, character_id)
+        trigger_tag = str(profile.profile_data.get("training", {}).get("identity_trigger", "")).strip()
     workflow = build_comfyui_workflow(
         character_id=character_id,
         input_refs=input_refs,
@@ -314,22 +339,22 @@ def refresh_generation_workflow(
         lora_name=str(identity.get("model", "{{lora_name}}")),
         openpose_controlnet_name=str(dict(stack.get("pose", {})).get("model", "{{openpose_controlnet_name}}")),
         depth_controlnet_name=str(dict(stack.get("depth", {})).get("model", "{{depth_controlnet_name}}")),
+        trigger_tag=trigger_tag or character_id,
         enable_ipadapter=use_ipadapter,
         ipadapter_preset=selected_preset,
         ipadapter_weight=selected_weight,
     )
-    trigger_tag = str(identity.get("trigger_tag", "")).strip()
-    if trigger_tag and trigger_tag != character_id:
-        workflow["3"]["inputs"]["text"] = f"{trigger_tag}, {workflow['3']['inputs']['text']}"
     write_json(paths["workflow"], workflow)
 
     control_images["face_repair_mask"] = project_relative_path(settings, face_mask_path)
     control_images["identity_reference"] = project_relative_path(settings, identity_reference_path)
+    control_images["face_reference"] = project_relative_path(settings, face_reference_path)
     control_images["comfyui_inputs"] = input_refs
     bundle["control_images"] = control_images
     stack["face_repair"] = {
         "provider": "reference_face_composite",
         "mask": input_refs["face_repair_mask"],
+        "image": input_refs["face_reference"],
         "feather_pixels": 12,
     }
     stack["reference_adapter"] = {
@@ -372,7 +397,7 @@ def check_simple_2p5d_generation_readiness(
     check_model(Path(comfyui_lora_dir), lora, "lora", issues)
     check_model(Path(comfyui_controlnet_dir), openpose, "openpose_controlnet", issues)
     check_model(Path(comfyui_controlnet_dir), depth, "depth_controlnet", issues)
-    for name in ("reference.png", "pose.png", "depth.png", "mask.png", "face_repair_mask.png"):
+    for name in ("reference.png", "pose.png", "depth.png", "mask.png", "face_repair_mask.png", "face_reference.png"):
         path = Path(comfyui_input_dir) / "anime_studio" / character_id / name
         if not path.is_file():
             issues.append(issue("missing_comfyui_input", str(path)))

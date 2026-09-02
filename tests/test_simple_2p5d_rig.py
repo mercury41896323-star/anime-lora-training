@@ -31,6 +31,7 @@ class Simple2p5DRigTest(unittest.TestCase):
             lora_name="identity_hero.safetensors",
             openpose_controlnet_name="openpose.safetensors",
             depth_controlnet_name="depth.safetensors",
+            trigger_tag="sample_identity_hero",
             enable_ipadapter=True,
             ipadapter_weight=0.6,
         )
@@ -42,6 +43,7 @@ class Simple2p5DRigTest(unittest.TestCase):
         self.assertEqual(workflow["20"]["inputs"]["image"], ["21", 0])
         self.assertEqual(workflow["20"]["inputs"]["weight"], 0.6)
         self.assertEqual(workflow["13"]["inputs"]["model"], ["20", 0])
+        self.assertTrue(workflow["3"]["inputs"]["text"].startswith("sample_identity_hero,"))
 
     def test_builds_sheet_to_rig_controls_workflow_and_live2d_bridge(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -57,6 +59,12 @@ class Simple2p5DRigTest(unittest.TestCase):
             draw.rectangle((570, 430, 586, 475), fill=(35, 35, 35))
             draw.rectangle((592, 430, 608, 475), fill=(35, 35, 35))
             image.save(sheet)
+            identity_sheet = root / "identity_sheet.png"
+            identity_image = Image.new("RGB", (600, 300), (255, 255, 255))
+            identity_draw = ImageDraw.Draw(identity_image)
+            identity_draw.ellipse((45, 20, 255, 230), fill=(205, 190, 175), outline=(40, 40, 40), width=4)
+            identity_draw.rectangle((105, 205, 195, 300), fill=(235, 220, 210))
+            identity_image.save(identity_sheet)
             comfyui_input = root / "comfyui_input"
 
             result = build_simple_2p5d_rig_pipeline(
@@ -68,6 +76,8 @@ class Simple2p5DRigTest(unittest.TestCase):
                     "identity": {"age": "16", "height_cm": 158},
                     "visual_identity": {"eye_colors": ["orange"]},
                 },
+                identity_reference_image=identity_sheet,
+                identity_crop=(0.0, 0.0, 0.5, 1.0),
                 comfyui_input_dir=comfyui_input,
                 lora_name="hiiragi_yukikaze.safetensors",
                 openpose_controlnet_name="control_openpose.pth",
@@ -94,6 +104,7 @@ class Simple2p5DRigTest(unittest.TestCase):
             self.assertTrue((comfyui_input / "anime_studio" / "hiiragi_yukikaze" / "pose.png").exists())
             self.assertTrue((comfyui_input / "anime_studio" / "hiiragi_yukikaze" / "face_repair_mask.png").exists())
             self.assertTrue((comfyui_input / "anime_studio" / "hiiragi_yukikaze" / "identity_reference.png").exists())
+            self.assertTrue((comfyui_input / "anime_studio" / "hiiragi_yukikaze" / "face_reference.png").exists())
             self.assertEqual(controls["generation_stack"]["pose"]["strength"], 1.0)
             self.assertTrue(all(controls["readiness"].values()))
             self.assertEqual(workflow["6"]["class_type"], "ControlNetLoader")
@@ -117,6 +128,8 @@ class Simple2p5DRigTest(unittest.TestCase):
                 self.assertIsNotNone(face_mask.getbbox())
             with Image.open(comfyui_input / "anime_studio" / "hiiragi_yukikaze" / "identity_reference.png") as identity:
                 self.assertEqual(identity.size, (512, 512))
+            with Image.open(comfyui_input / "anime_studio" / "hiiragi_yukikaze" / "face_reference.png") as face_reference:
+                self.assertEqual(face_reference.size, (512, 768))
 
             self.assertIn("head fully visible", workflow["3"]["inputs"]["text"])
             self.assertIn("cropped head", workflow["4"]["inputs"]["text"])
@@ -130,6 +143,8 @@ class Simple2p5DRigTest(unittest.TestCase):
             self.assertTrue(controls["primary_reference"].endswith("reference.png"))
             self.assertTrue(controls["identity_reference"].endswith("identity_reference.png"))
             self.assertEqual(workflow["15"]["class_type"], "LoadImageMask")
+            self.assertEqual(workflow["22"]["class_type"], "LoadImage")
+            self.assertEqual(workflow["17"]["inputs"]["source"], ["22", 0])
             self.assertEqual(workflow["16"]["class_type"], "FeatherMask")
             self.assertEqual(workflow["17"]["class_type"], "ImageCompositeMasked")
             self.assertTrue(workflow["18"]["inputs"]["filename_prefix"].endswith("_face_repaired"))

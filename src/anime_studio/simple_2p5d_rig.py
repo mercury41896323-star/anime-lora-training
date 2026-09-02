@@ -8,7 +8,7 @@ import shutil
 from statistics import median
 from typing import Any
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
 from .character_2p5d_definition import generate_character_2p5d_definition
 from .character_master_asset import import_character_master_asset
@@ -67,6 +67,8 @@ def build_simple_2p5d_rig_pipeline(
     sheet_image: str | Path,
     display_name: str = "",
     profile_overrides: str | Path | dict[str, Any] | None = None,
+    identity_reference_image: str | Path | None = None,
+    identity_crop: tuple[float, float, float, float] | None = None,
     source_id: str = "external_sheet",
     comfyui_input_dir: str | Path | None = None,
     checkpoint_name: str = "sd15.safetensors",
@@ -81,9 +83,16 @@ def build_simple_2p5d_rig_pipeline(
     source_path = Path(sheet_image)
     if not source_path.is_file():
         raise FileNotFoundError(f"Character sheet source does not exist: {source_path}")
+    identity_source_path = Path(identity_reference_image) if identity_reference_image else None
+    if identity_source_path is not None and not identity_source_path.is_file():
+        raise FileNotFoundError(f"Identity reference source does not exist: {identity_source_path}")
 
     ensure_profile(settings, character_id, display_name or character_id)
     update_profile(settings, character_id, profile_overrides)
+    profile = load_character_profile(settings, character_id)
+    identity_trigger = str(
+        profile.profile_data.get("training", {}).get("identity_trigger") or character_id
+    )
     master = import_character_master_asset(
         settings=settings,
         character_id=character_id,
@@ -103,7 +112,14 @@ def build_simple_2p5d_rig_pipeline(
     primary = select_primary_reference(settings, sections)
     rig_dir = settings.assets.processed / "characters" / character_id / "simple_2p5d_rig"
     rig_dir.mkdir(parents=True, exist_ok=True)
-    rig_assets = generate_rig_assets(settings, character_id, primary, rig_dir)
+    rig_assets = generate_rig_assets(
+        settings,
+        character_id,
+        primary,
+        rig_dir,
+        identity_source=identity_source_path,
+        identity_crop=identity_crop,
+    )
     clean_reference = Path(rig_assets["reference"])
 
     rig_path = rig_dir / "simple_2p5d_rig.json"
@@ -127,6 +143,7 @@ def build_simple_2p5d_rig_pipeline(
         input_refs=input_refs,
         checkpoint_name=checkpoint_name,
         lora_name=lora_name,
+        trigger_tag=identity_trigger,
         openpose_controlnet_name=openpose_controlnet_name,
         depth_controlnet_name=depth_controlnet_name,
         enable_ipadapter=enable_ipadapter,
@@ -155,6 +172,7 @@ def build_simple_2p5d_rig_pipeline(
         workflow_ready=workflow_ready,
         checkpoint_name=checkpoint_name,
         lora_name=lora_name,
+        trigger_tag=identity_trigger,
         openpose_controlnet_name=openpose_controlnet_name,
         depth_controlnet_name=depth_controlnet_name,
         enable_ipadapter=enable_ipadapter,
@@ -288,6 +306,8 @@ def generate_rig_assets(
     character_id: str,
     primary: Path,
     rig_dir: Path,
+    identity_source: Path | None = None,
+    identity_crop: tuple[float, float, float, float] | None = None,
 ) -> dict[str, Any]:
     masks_dir = rig_dir / "masks"
     parts_dir = rig_dir / "transparent_parts"
@@ -306,8 +326,20 @@ def generate_rig_assets(
     reference = Image.new("RGB", image.size, (255, 255, 255))
     reference.paste(image.convert("RGB"), mask=silhouette)
     reference.save(reference_path)
+    identity_source_crop_path = controls_dir / "identity_source_crop.png"
+    identity_source_image = load_identity_source(identity_source, identity_crop)
     identity_reference_path = controls_dir / "identity_reference.png"
-    build_ipadapter_identity_reference(image, silhouette).save(identity_reference_path)
+    if identity_source_image is None:
+        identity_reference = build_ipadapter_identity_reference(image, silhouette)
+    else:
+        identity_source_image.save(identity_source_crop_path)
+        identity_reference = ImageOps.fit(
+            identity_source_image,
+            (512, 512),
+            method=Image.Resampling.LANCZOS,
+            centering=(0.5, 0.45),
+        )
+    identity_reference.save(identity_reference_path)
     part_masks = build_part_masks(silhouette)
     part_records: list[dict[str, Any]] = []
     for part_id, parent_id, z_order, _, pivot in PART_SPECS:
@@ -336,16 +368,67 @@ def generate_rig_assets(
     pose_path = controls_dir / "pose.png"
     build_pose_image(silhouette).save(pose_path)
     face_repair_mask_path = controls_dir / "face_repair_mask.png"
-    build_face_repair_mask(silhouette).save(face_repair_mask_path)
+    face_repair_mask = build_face_repair_mask(silhouette)
+    face_repair_mask.save(face_repair_mask_path)
+    face_reference_path = controls_dir / "face_reference.png"
+    build_face_reference(reference, identity_reference, face_repair_mask).save(face_reference_path)
     return {
         "reference": reference_path,
         "identity_reference": identity_reference_path,
+        "identity_source_crop": identity_source_crop_path if identity_source_image is not None else None,
+        "face_reference": face_reference_path,
         "silhouette": silhouette_path,
         "depth": depth_path,
         "pose": pose_path,
         "face_repair_mask": face_repair_mask_path,
         "parts": part_records,
     }
+
+
+def load_identity_source(
+    source_path: Path | None,
+    normalized_crop: tuple[float, float, float, float] | None,
+) -> Image.Image | None:
+    if source_path is None:
+        return None
+    with Image.open(source_path) as source:
+        image = source.convert("RGB")
+    if normalized_crop is None:
+        return image
+    left, top, right, bottom = normalized_crop
+    if not (0.0 <= left < right <= 1.0 and 0.0 <= top < bottom <= 1.0):
+        raise ValueError("Identity crop values must satisfy 0 <= left < right <= 1 and 0 <= top < bottom <= 1.")
+    crop_box = (
+        int(round(left * image.width)),
+        int(round(top * image.height)),
+        int(round(right * image.width)),
+        int(round(bottom * image.height)),
+    )
+    return image.crop(crop_box)
+
+
+def build_face_reference(
+    reference: Image.Image,
+    identity_reference: Image.Image,
+    face_mask: Image.Image,
+) -> Image.Image:
+    destination = reference.convert("RGB").copy()
+    destination_box = face_mask.getbbox()
+    if destination_box is None:
+        return destination
+    source = identity_reference.convert("RGB")
+    source_mask = build_foreground_mask(source)
+    source_box = source_mask.getbbox()
+    if source_box is None:
+        return destination
+    source_left, source_top, source_right, source_bottom = source_box
+    source_width = max(1, source_right - source_left)
+    head_bottom = min(source_bottom, source_top + int(round(source_width * 1.08)))
+    head_crop = source.crop((source_left, source_top, source_right, head_bottom))
+    target_size = (destination_box[2] - destination_box[0], destination_box[3] - destination_box[1])
+    aligned_head = ImageOps.fit(head_crop, target_size, method=Image.Resampling.LANCZOS, centering=(0.5, 0.45))
+    destination.paste(aligned_head, destination_box, face_mask.crop(destination_box))
+    return destination
 
 
 def compose_full_body_reference(
@@ -537,7 +620,7 @@ def build_face_repair_mask(silhouette: Image.Image) -> Image.Image:
             int(left + width * 0.10),
             top,
             int(right - width * 0.10),
-            int(top + height * 0.19),
+            int(top + height * 0.16),
         ),
         fill=255,
     )
@@ -760,6 +843,7 @@ def prepare_comfyui_inputs(
     sources = {
         "reference": primary,
         "identity_reference": Path(rig_assets["identity_reference"]),
+        "face_reference": Path(rig_assets["face_reference"]),
         "pose": Path(rig_assets["pose"]),
         "depth": Path(rig_assets["depth"]),
         "mask": Path(rig_assets["silhouette"]),
@@ -784,10 +868,12 @@ def build_comfyui_workflow(
     lora_name: str,
     openpose_controlnet_name: str,
     depth_controlnet_name: str,
+    trigger_tag: str | None = None,
     enable_ipadapter: bool = False,
     ipadapter_preset: str = "PLUS FACE (portraits)",
     ipadapter_weight: float = 0.55,
 ) -> dict[str, Any]:
+    positive_trigger = trigger_tag or character_id
     workflow: dict[str, Any] = {
         "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": checkpoint_name}},
         "2": {
@@ -799,7 +885,7 @@ def build_comfyui_workflow(
             "inputs": {
                 "clip": ["2", 1],
                 "text": (
-                    f"{character_id}, anime character, preserve master identity, 2.5D controlled pose, "
+                    f"{positive_trigger}, anime character, preserve master identity, 2.5D controlled pose, "
                     "solo, 1girl, single subject, one character only, full body, head fully visible, "
                     "feet fully visible, centered composition, generous headroom, plain background"
                 ),
@@ -852,6 +938,7 @@ def build_comfyui_workflow(
             "class_type": "LoadImageMask",
             "inputs": {"image": input_refs["face_repair_mask"], "channel": "red"},
         },
+        "22": {"class_type": "LoadImage", "inputs": {"image": input_refs.get("face_reference", input_refs["reference"])}},
         "16": {
             "class_type": "FeatherMask",
             "inputs": {"mask": ["15", 0], "left": 12, "top": 12, "right": 12, "bottom": 12},
@@ -859,7 +946,7 @@ def build_comfyui_workflow(
         "17": {
             "class_type": "ImageCompositeMasked",
             "inputs": {
-                "destination": ["14", 0], "source": ["11", 0], "x": 0, "y": 0,
+                "destination": ["14", 0], "source": ["22", 0], "x": 0, "y": 0,
                 "resize_source": False, "mask": ["16", 0],
             },
         },
@@ -906,6 +993,7 @@ def build_control_bundle(
     workflow_ready: bool,
     checkpoint_name: str,
     lora_name: str,
+    trigger_tag: str,
     openpose_controlnet_name: str,
     depth_controlnet_name: str,
     enable_ipadapter: bool,
@@ -928,12 +1016,18 @@ def build_control_bundle(
             "depth": project_relative_path(settings, rig_assets["depth"]),
             "pose": project_relative_path(settings, rig_assets["pose"]),
             "face_repair_mask": project_relative_path(settings, rig_assets["face_repair_mask"]),
+            "face_reference": project_relative_path(settings, rig_assets["face_reference"]),
             "identity_reference": project_relative_path(settings, rig_assets["identity_reference"]),
             "comfyui_inputs": input_refs,
         },
         "generation_stack": {
             "checkpoint": checkpoint_name,
-            "identity": {"provider": "character_lora", "model": lora_name, "strength": 0.7},
+            "identity": {
+                "provider": "character_lora",
+                "model": lora_name,
+                "trigger_tag": trigger_tag,
+                "strength": 0.7,
+            },
             "reference_adapter": {
                 "provider": "ipadapter_plus" if enable_ipadapter else "disabled",
                 "enabled": enable_ipadapter,
@@ -946,6 +1040,7 @@ def build_control_bundle(
             "face_repair": {
                 "provider": "reference_face_composite",
                 "mask": input_refs["face_repair_mask"],
+                "image": input_refs["face_reference"],
                 "feather_pixels": 12,
             },
             "pose": {"provider": "controlnet_openpose", "model": openpose_controlnet_name, "strength": 1.0},
@@ -1033,6 +1128,19 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def parse_normalized_crop(value: str) -> tuple[float, float, float, float]:
+    try:
+        coordinates = tuple(float(item.strip()) for item in value.split(","))
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("Identity crop must contain four decimal values.") from error
+    if len(coordinates) != 4:
+        raise argparse.ArgumentTypeError("Identity crop must be left,top,right,bottom.")
+    left, top, right, bottom = coordinates
+    if not (0.0 <= left < right <= 1.0 and 0.0 <= top < bottom <= 1.0):
+        raise argparse.ArgumentTypeError("Identity crop values must be normalized between 0 and 1.")
+    return left, top, right, bottom
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="anime-simple-2p5d",
@@ -1043,6 +1151,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--display-name", default="")
     parser.add_argument("--sheet", required=True)
     parser.add_argument("--profile-overrides", default=None)
+    parser.add_argument("--identity-reference", default=None)
+    parser.add_argument(
+        "--identity-crop",
+        type=parse_normalized_crop,
+        default=None,
+        help="Optional normalized left,top,right,bottom crop for a portrait inside an identity sheet.",
+    )
     parser.add_argument("--source-id", default="external_sheet")
     parser.add_argument("--comfyui-input-dir", default=None)
     parser.add_argument("--checkpoint", default="sd15.safetensors")
@@ -1063,6 +1178,8 @@ def main(argv: list[str] | None = None) -> int:
         sheet_image=args.sheet,
         display_name=args.display_name,
         profile_overrides=args.profile_overrides,
+        identity_reference_image=args.identity_reference,
+        identity_crop=args.identity_crop,
         source_id=args.source_id,
         comfyui_input_dir=args.comfyui_input_dir,
         checkpoint_name=args.checkpoint,

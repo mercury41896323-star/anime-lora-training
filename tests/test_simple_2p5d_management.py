@@ -100,6 +100,7 @@ class Simple2p5DManagementTest(unittest.TestCase):
             self.assertEqual(bundle["generation_stack"]["reference_adapter"]["weight"], 0.5)
             self.assertTrue((input_dir / "anime_studio" / "managed_hero" / "face_repair_mask.png").exists())
             self.assertTrue((input_dir / "anime_studio" / "managed_hero" / "identity_reference.png").exists())
+            self.assertTrue((input_dir / "anime_studio" / "managed_hero" / "face_reference.png").exists())
             self.assertEqual(profile.profile_data["generation"]["selected_lora"], "managed_hero.safetensors")
 
     def test_blocks_approval_when_silhouette_touches_canvas_edges(self) -> None:
