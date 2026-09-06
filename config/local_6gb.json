@@ -12,6 +12,31 @@
     "batch_size": 1,
     "precision": "fp16"
   },
+  "bernini_low_vram": {
+    "enabled": true,
+    "renderer_model": "bernini_r_1.3B-Q4_K_M.gguf",
+    "text_encoder": "umt5-xxl-encoder-Q5_K_M.gguf",
+    "vae": "wan_2.1_vae.safetensors",
+    "width": 512,
+    "height": 320,
+    "fps": 12,
+    "steps": 16,
+    "segment_duration_seconds": 1.25,
+    "max_duration_seconds": 30.0,
+    "max_vram_gb": 5.25,
+    "max_ram_gb": 28.0,
+    "vae_tile_size": 256,
+    "vae_temporal_size": 8,
+    "comfyui_startup_args": [
+      "--cpu-vae",
+      "--cache-none",
+      "--disable-smart-memory",
+      "--reserve-vram",
+      "0.75",
+      "--preview-method",
+      "none"
+    ]
+  },
   "training_defaults": {
     "network_module": "lora",
     "train_batch_size": 1,

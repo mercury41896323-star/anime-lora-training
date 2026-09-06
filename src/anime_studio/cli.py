@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .asset_inventory import collect_asset_inventory
 from .asset_library import collect_asset_library, write_asset_library_index
+from .bernini_low_vram import assemble_bernini_segments, export_bernini_low_vram_shot
 from .character_manager import register_character_asset
 from .character_profile import confirm_character_source_rights, create_character_profile
 from .comfyui_queue import (
@@ -489,6 +490,57 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         help="Index of the LoRA entry to inject from the manifest.",
     )
+    comfyui_bernini = comfyui_subparsers.add_parser(
+        "export-bernini",
+        help="Export segmented Bernini-R 1.3B workflows for a 6GB GPU.",
+    )
+    comfyui_bernini.add_argument("--story-id", required=True, help="Storyboard id.")
+    comfyui_bernini.add_argument("--shot-id", required=True, help="Storyboard shot id.")
+    comfyui_bernini.add_argument(
+        "--duration",
+        type=float,
+        default=None,
+        help="Optional output duration override in seconds.",
+    )
+    comfyui_bernini.add_argument(
+        "--max-duration",
+        type=float,
+        default=None,
+        help="Optional lower safety limit; cannot exceed the configured hard limit.",
+    )
+    comfyui_bernini.add_argument(
+        "--reference-image",
+        default=None,
+        help="Optional reference image; defaults to the Character Master / 2.5D identity anchor.",
+    )
+    comfyui_bernini.add_argument(
+        "--comfyui-input-dir",
+        default=None,
+        help="ComfyUI input directory. Auto-detects ComfyUI Desktop when omitted.",
+    )
+    comfyui_bernini.add_argument("--output-dir", default=None, help="Optional workflow output directory.")
+    comfyui_bernini.add_argument(
+        "--queue",
+        action="store_true",
+        help="Add every segment to the local ComfyUI queue in generation order.",
+    )
+    comfyui_bernini.add_argument(
+        "--base-url",
+        default=DEFAULT_COMFYUI_BASE_URL,
+        help="ComfyUI server URL used when --queue is set.",
+    )
+    comfyui_bernini.add_argument(
+        "--queue-path",
+        default=None,
+        help="Queue JSON path. Defaults to queues/comfyui/jobs.json.",
+    )
+    comfyui_bernini_assemble = comfyui_subparsers.add_parser(
+        "assemble-bernini",
+        help="Join imported Bernini segments and trim to the requested duration.",
+    )
+    comfyui_bernini_assemble.add_argument("--plan", required=True, help="Bernini generation plan JSON.")
+    comfyui_bernini_assemble.add_argument("--output", default=None, help="Optional final MP4 path.")
+    comfyui_bernini_assemble.add_argument("--ffmpeg", default="ffmpeg", help="FFmpeg executable path.")
     comfyui_queue_add = comfyui_subparsers.add_parser(
         "queue-add",
         help="Add an exported workflow to the local ComfyUI submission queue.",
@@ -1080,6 +1132,41 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Manifest: {result.manifest_path}")
         print(f"Template: {result.template_path}")
         print(f"LoRA: {result.lora_name}")
+        return 0
+
+    if args.command == "comfyui" and args.comfyui_command == "export-bernini":
+        result = export_bernini_low_vram_shot(
+            settings=settings,
+            story_id=args.story_id,
+            shot_id=args.shot_id,
+            duration_seconds=args.duration,
+            max_duration_seconds=args.max_duration,
+            reference_image=args.reference_image,
+            comfyui_input_dir=args.comfyui_input_dir,
+            output_dir=args.output_dir,
+            enqueue=args.queue,
+            base_url=args.base_url,
+            queue_path=args.queue_path,
+        )
+        print(f"Wrote Bernini low-VRAM plan: {result.manifest_path}")
+        print(f"Reference: {result.reference_source}")
+        print(f"Duration: {result.requested_duration_seconds:g}s")
+        print(f"Segments: {len(result.segments)}")
+        if args.queue:
+            print("Queued segments in chronological order.")
+        return 0
+
+    if args.command == "comfyui" and args.comfyui_command == "assemble-bernini":
+        result = assemble_bernini_segments(
+            settings=settings,
+            plan_path=args.plan,
+            output_path=args.output,
+            ffmpeg_path=args.ffmpeg,
+        )
+        print(f"Wrote Bernini final video: {result.output_path}")
+        print(f"Duration: {result.requested_duration_seconds:g}s")
+        print(f"Segments: {len(result.input_videos)}")
+        print(f"Assembly manifest: {result.manifest_path}")
         return 0
 
     if args.command == "comfyui" and args.comfyui_command == "queue-add":

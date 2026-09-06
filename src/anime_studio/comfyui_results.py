@@ -50,9 +50,9 @@ def import_comfyui_results(
         raise ValueError(f"ComfyUI queue job not found: {job_id}")
 
     prompt_id = str(job.get("prompt_id", ""))
-    output_items = extract_history_images(job)
+    output_items = extract_history_outputs(job)
     if not output_items:
-        raise ValueError(f"No ComfyUI image outputs found for job: {job_id}")
+        raise ValueError(f"No ComfyUI media outputs found for job: {job_id}")
 
     source_root = normalize_project_path(settings, comfyui_output_dir)
     destination_dir = (
@@ -86,7 +86,7 @@ def import_comfyui_results(
             source_reference=render_source_reference(item),
             stored_path=stored_path,
             node_id=str(item["node_id"]),
-            kind="image",
+            kind=str(item["kind"]),
             size_bytes=size_bytes,
         )
         imported.append(imported_item)
@@ -94,7 +94,7 @@ def import_comfyui_results(
         asset = RegisteredAsset(
             original_path=str(source),
             stored_path=stored_path,
-            kind="image",
+            kind=str(item["kind"]),
             size_bytes=size_bytes,
             source="comfyui_result",
             metadata={
@@ -104,6 +104,8 @@ def import_comfyui_results(
                 "filename": str(item["filename"]),
                 "subfolder": str(item.get("subfolder", "")),
                 "type": str(item.get("type", "output")),
+                "kind": str(item["kind"]),
+                "collection": str(item.get("collection", "")),
                 "metadata_only": metadata_only,
             },
         )
@@ -136,17 +138,34 @@ def import_comfyui_results(
 
 
 def extract_history_images(job: dict[str, Any]) -> list[dict[str, object]]:
+    return [item for item in extract_history_outputs(job) if item.get("kind") == "image"]
+
+
+def extract_history_outputs(job: dict[str, Any]) -> list[dict[str, object]]:
     prompt_id = str(job.get("prompt_id", ""))
     response = dict(job.get("response", {}))
     prompt_history = dict(response.get(prompt_id, {}))
     outputs = dict(prompt_history.get("outputs", {}))
-    images: list[dict[str, object]] = []
+    media: list[dict[str, object]] = []
+    output_kinds = {
+        "images": "image",
+        "berninir_video": "video",
+        "videos": "video",
+        "gifs": "video",
+        "audio": "audio",
+    }
     for node_id, node_output in outputs.items():
-        for image in dict(node_output).get("images", []):
-            item = dict(image)
-            item["node_id"] = str(node_id)
-            images.append(item)
-    return images
+        output = dict(node_output)
+        for collection_name, kind in output_kinds.items():
+            for raw_item in output.get(collection_name, []):
+                if not isinstance(raw_item, dict) or not raw_item.get("filename"):
+                    continue
+                item = dict(raw_item)
+                item["node_id"] = str(node_id)
+                item["kind"] = kind
+                item["collection"] = collection_name
+                media.append(item)
+    return media
 
 
 def resolve_comfyui_output_path(source_root: Path, item: dict[str, object]) -> Path:

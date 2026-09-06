@@ -83,6 +83,7 @@ def submit_comfyui_job(
         job["comfyui_base_url"] = normalize_base_url(base_url)
 
     workflow = read_workflow(settings, job["workflow_path"])
+    api_workflow = prepare_workflow_prompt(workflow)
     timestamp = utc_timestamp()
     if dry_run:
         job.update(
@@ -90,7 +91,7 @@ def submit_comfyui_job(
                 "status": "dry_run",
                 "updated_at": timestamp,
                 "checked_at": timestamp,
-                "response": {"prompt": workflow},
+                "response": {"prompt": api_workflow},
                 "error": "",
             }
         )
@@ -100,7 +101,7 @@ def submit_comfyui_job(
     try:
         response = post_json(
             urljoin(str(job["comfyui_base_url"]) + "/", "prompt"),
-            {"prompt": workflow},
+            {"prompt": api_workflow},
             timeout_seconds=timeout_seconds,
         )
         prompt_id = str(response.get("prompt_id", ""))
@@ -280,6 +281,14 @@ def find_job(
 def read_workflow(settings: AppSettings, workflow_path: str | Path) -> dict[str, Any]:
     resolved_workflow = normalize_project_path(settings, workflow_path)
     return json.loads(resolved_workflow.read_text(encoding="utf-8-sig"))
+
+
+def prepare_workflow_prompt(workflow: dict[str, Any]) -> dict[str, Any]:
+    return {
+        str(node_id): node
+        for node_id, node in workflow.items()
+        if isinstance(node, dict) and "class_type" in node and isinstance(node.get("inputs"), dict)
+    }
 
 
 def post_json(url: str, payload: dict[str, Any], timeout_seconds: float) -> dict[str, Any]:

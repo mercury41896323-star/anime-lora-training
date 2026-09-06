@@ -1,0 +1,24 @@
+{
+  "story_id": "bernini_chiyoko_smoke",
+  "title": "Bernini Chiyoko Low VRAM Smoke",
+  "created_at": "2026-09-06T00:43:30Z",
+  "updated_at": "2026-09-06T00:43:30Z",
+  "shots": [
+    {
+      "shot_id": "shot_001",
+      "order": 1,
+      "title": "Identity motion smoke",
+      "character_id": "chiyoko",
+      "prompt": "Chiyoko gently turns her head and blinks, subtle natural motion, fixed camera",
+      "negative_prompt": "large body movement, scene change",
+      "duration_seconds": 1.0,
+      "camera": "",
+      "lighting": "",
+      "seed": null,
+      "width": null,
+      "height": null,
+      "steps": null,
+      "notes": ""
+    }
+  ]
+}

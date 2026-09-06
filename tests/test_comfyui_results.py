@@ -64,8 +64,32 @@ class ComfyUIResultsTest(unittest.TestCase):
             assets = json.loads(result.assets_manifest_path.read_text(encoding="utf-8"))
             self.assertTrue(assets["assets"][0]["metadata"]["metadata_only"])
 
+    def test_imports_bernini_video_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            settings = write_settings(root)
+            create_character_profile(settings, "sample_hero", "Sample Hero")
+            source_dir = root / "comfyui_output" / "anime_studio"
+            source_dir.mkdir(parents=True)
+            source_video = source_dir / "segment_001.mp4"
+            source_video.write_bytes(b"generated-video")
+            write_queue(root, collection="berninir_video", filename="segment_001.mp4")
 
-def write_queue(root: Path) -> Path:
+            result = import_comfyui_results(
+                settings=settings,
+                character_id="sample_hero",
+                job_id="job-1",
+                comfyui_output_dir=source_dir.parent,
+            )
+
+            self.assertEqual(result.imported[0].kind, "video")
+            self.assertEqual((root / result.imported[0].stored_path).read_bytes(), b"generated-video")
+            assets = json.loads(result.assets_manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(assets["assets"][0]["kind"], "video")
+            self.assertEqual(assets["assets"][0]["metadata"]["collection"], "berninir_video")
+
+
+def write_queue(root: Path, collection: str = "images", filename: str = "sample.png") -> Path:
     queue_path = root / "queues" / "comfyui" / "jobs.json"
     queue_path.parent.mkdir(parents=True)
     queue_path.write_text(
@@ -84,9 +108,9 @@ def write_queue(root: Path) -> Path:
                             "prompt-1": {
                                 "outputs": {
                                     "8": {
-                                        "images": [
+                                        collection: [
                                             {
-                                                "filename": "sample.png",
+                                                "filename": filename,
                                                 "subfolder": "anime_studio",
                                                 "type": "output",
                                             }

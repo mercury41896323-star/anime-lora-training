@@ -61,6 +61,7 @@ class ComfyUIQueueTest(unittest.TestCase):
                 server.stop()
 
             self.assertEqual(server.received_payload["prompt"]["1"]["class_type"], "SaveImage")
+            self.assertNotIn("meta", server.received_payload["prompt"])
             self.assertEqual(submitted.job["status"], "submitted")
             self.assertEqual(submitted.job["prompt_id"], "prompt-test-1")
             self.assertEqual(submitted.job["queue_number"], 1)
@@ -159,7 +160,12 @@ def write_workflow(root: Path) -> Path:
     workflow_path = root / "outputs" / "comfyui" / "sample" / "workflow.json"
     workflow_path.parent.mkdir(parents=True)
     workflow_path.write_text(
-        json.dumps({"1": {"class_type": "SaveImage", "inputs": {"images": []}}}),
+        json.dumps(
+            {
+                "1": {"class_type": "SaveImage", "inputs": {"images": []}},
+                "meta": {"story_id": "pilot_scene"},
+            }
+        ),
         encoding="utf-8",
     )
     return workflow_path

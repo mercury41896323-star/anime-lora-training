@@ -52,6 +52,8 @@ RTX 3050 6GB VRAM環境を前提にした軽量な制作パイプラインとし
 動画からCharacter Master、2.5D制御までの手順は `docs/video_character_consistency_pipeline.md` を参照してください。
 新しい学習設計は `docs/2p5d_first_learning_architecture.md` を参照してください。
 Simple 2.5D Rigの作成手順は `docs/simple_2p5d_rig_pipeline.md` を参照してください。
+
+Bernini-R 1.3BをRAM退避と短尺分割で動かす手順は `docs/bernini_low_vram_generation.md` を参照してください。
 IPAdapterによる同一性補強は `docs/ipadapter_identity_control.md` を参照してください。
 動画由来フレームの人間確認は `docs/clean_frame_review.md` を参照してください。
 専用trainerの使い方は `docs/domain_trainers.md`、ニューラル学習providerは `docs/neural_trainers.md` を参照してください。

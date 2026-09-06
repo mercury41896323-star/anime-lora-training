@@ -30,12 +30,31 @@ class ModelPaths:
 
 
 @dataclass(frozen=True)
+class BerniniLowVramSettings:
+    enabled: bool
+    renderer_model: str
+    text_encoder: str
+    vae: str
+    width: int
+    height: int
+    fps: int
+    steps: int
+    segment_duration_seconds: float
+    max_duration_seconds: float
+    max_vram_gb: float
+    max_ram_gb: float
+    vae_tile_size: int
+    vae_temporal_size: int
+
+
+@dataclass(frozen=True)
 class AppSettings:
     project_root: Path
     runtime: RuntimeProfile
     assets: AssetPaths
     datasets: DatasetPaths
     models: ModelPaths
+    bernini_low_vram: BerniniLowVramSettings
     image_extensions: tuple[str, ...]
     video_extensions: tuple[str, ...]
 
@@ -49,6 +68,7 @@ def load_settings(config_path: str | Path) -> AppSettings:
     assets = data["assets"]
     datasets = data.get("datasets", {})
     models = data.get("models", {})
+    bernini = data.get("bernini_low_vram", {})
 
     return AppSettings(
         project_root=base_dir.resolve(),
@@ -67,6 +87,22 @@ def load_settings(config_path: str | Path) -> AppSettings:
         ),
         models=ModelPaths(
             wd14=(base_dir / models.get("wd14_dir", "models/wd14")).resolve(),
+        ),
+        bernini_low_vram=BerniniLowVramSettings(
+            enabled=bool(bernini.get("enabled", False)),
+            renderer_model=str(bernini.get("renderer_model", "bernini_r_1.3B-Q4_K_M.gguf")),
+            text_encoder=str(bernini.get("text_encoder", "umt5-xxl-encoder-Q5_K_M.gguf")),
+            vae=str(bernini.get("vae", "wan_2.1_vae.safetensors")),
+            width=int(bernini.get("width", 512)),
+            height=int(bernini.get("height", 320)),
+            fps=int(bernini.get("fps", 12)),
+            steps=int(bernini.get("steps", 16)),
+            segment_duration_seconds=float(bernini.get("segment_duration_seconds", 1.25)),
+            max_duration_seconds=float(bernini.get("max_duration_seconds", 30.0)),
+            max_vram_gb=float(bernini.get("max_vram_gb", 5.25)),
+            max_ram_gb=float(bernini.get("max_ram_gb", 28.0)),
+            vae_tile_size=int(bernini.get("vae_tile_size", 256)),
+            vae_temporal_size=int(bernini.get("vae_temporal_size", 8)),
         ),
         image_extensions=tuple(data["asset_types"]["image_extensions"]),
         video_extensions=tuple(data["asset_types"]["video_extensions"]),
