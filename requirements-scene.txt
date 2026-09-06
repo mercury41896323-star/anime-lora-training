@@ -1,0 +1,4 @@
+# Optional dependencies for scene detection/capture PoC.
+# PySceneDetect recommends pinning below the next major release.
+scenedetect<0.8
+opencv-python>=4.8
