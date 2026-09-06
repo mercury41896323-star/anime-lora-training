@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -109,12 +109,57 @@ class Simple2p5DRigTest(unittest.TestCase):
             self.assertTrue(all(controls["readiness"].values()))
             self.assertEqual(workflow["6"]["class_type"], "ControlNetLoader")
             self.assertEqual(len(live2d["art_meshes"]), 12)
+            hair_back = next(part for part in rig["parts"] if part["part_id"] == "hair_back")
+            self.assertEqual(hair_back["parent_id"], "head")
             self.assertEqual(profile.profile_data["identity"]["height_cm"], 158)
             self.assertTrue(profile.rig_2p5d.endswith("simple_2p5d_rig.json"))
             self.assertEqual(pipeline["steps"][-1]["status"], "ready")
 
             with Image.open(root / rig["parts"][0]["transparent_image"]) as part:
                 self.assertEqual(part.mode, "RGBA")
+
+            part_bounds = {}
+            head_masks = {}
+            for part in rig["parts"]:
+                with Image.open(root / part["transparent_image"]) as image_part:
+                    part_bounds[part["part_id"]] = image_part.getchannel("A").getbbox()
+                if part["part_id"] in {"hair_back", "head", "face", "eyes", "mouth", "hair_front"}:
+                    with Image.open(root / part["mask_image"]) as part_mask:
+                        head_masks[part["part_id"]] = part_mask.convert("L")
+            with Image.open(root / definition["simple_2p5d_rig"]["silhouette_mask"]) as silhouette:
+                silhouette_bounds = silhouette.getbbox()
+                body_left, body_top, body_right, body_bottom = silhouette_bounds
+                body_width = body_right - body_left
+                body_height = body_bottom - body_top
+                expected_head = Image.new("L", silhouette.size, 0)
+                ImageDraw.Draw(expected_head).rectangle(
+                    (
+                        int(body_left + body_width * 0.12),
+                        body_top,
+                        int(body_left + body_width * 0.88),
+                        int(body_top + body_height * 0.17),
+                    ),
+                    fill=255,
+                )
+                expected_head = ImageChops.multiply(silhouette.convert("L"), expected_head)
+            self.assertLessEqual(part_bounds["head"][3] - part_bounds["torso"][1], 1)
+            self.assertLessEqual(part_bounds["face"][3] - part_bounds["torso"][1], 1)
+            self.assertLessEqual(part_bounds["hair_back"][3] - part_bounds["torso"][1], 1)
+            self.assertLessEqual(abs(part_bounds["torso"][1] - part_bounds["head"][3]), 1)
+            self.assertLess(part_bounds["mouth"][3], part_bounds["face"][3])
+            head_parts = list(head_masks.values())
+            for index, current in enumerate(head_parts):
+                self.assertIsNotNone(current.getbbox())
+                for other in head_parts[index + 1 :]:
+                    self.assertIsNone(ImageChops.multiply(current, other).getbbox())
+            combined_head = head_parts[0]
+            for current in head_parts[1:]:
+                combined_head = ImageChops.lighter(combined_head, current)
+            self.assertIsNone(ImageChops.difference(combined_head, expected_head).getbbox())
+            self.assertEqual(
+                rig["head_segmentation"]["guarantees"],
+                ["pairwise_disjoint", "complete_head_coverage"],
+            )
 
             with Image.open(root / definition["simple_2p5d_rig"]["pose_image"]) as pose:
                 self.assertEqual(pose.size, (512, 768))

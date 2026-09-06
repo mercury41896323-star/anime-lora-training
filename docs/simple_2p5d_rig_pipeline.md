@@ -112,7 +112,7 @@ anime-simple-2p5d-manage refresh-workflow `
 
 ## 制約
 
-- Maskは背景色差と身体ゾーンによる簡易Draftであり、髪・顔・腕を意味的に分割するAI segmentationではありません。
+- 身体Maskは背景色差と身体ゾーンによる簡易Draftです。頭部は位置・明度・色差を組み合わせて`hair_back`、`head`、`face`、`eyes`、`mouth`、`hair_front`へ相互非重複に分離しますが、AI segmentationではないため人間の確認が必要です。
 - Poseは正面全身bboxから作る近似骨格です。実運用ではOpenPose/DWPoseで再生成します。
 - Meshは四角形2三角のDraftです。Live2D CubismでArtMesh、deformer、pivot、clippingを調整します。
 - workflowはControlNet modelと学習済みLoRAの実ファイル名が揃うまで`needs_models`です。
@@ -184,3 +184,7 @@ anime-simple-2p5d-manage readiness `
 状態遷移は`built -> pending_review -> approved -> lora_bound -> generation_ready`です。
 
 2026-08-25のRTX 3050 6GB実機結果は`docs/test_log_2026-08-25_simple_2p5d_local_generation.md`を参照してください。
+
+ArtMesh、Deformer、pivot、parameter keyformの調整パッケージは`docs/live2d_rig_adjustment.md`を参照してください。
+
+パーツ別ComfyUI生成、透明化、2048x3072合成、Seam Repair、Cubism PSD出力は`docs/high_resolution_layered_character.md`を参照してください。

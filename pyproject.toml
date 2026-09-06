@@ -7,7 +7,7 @@ name = "ai-anime-studio"
 version = "0.1.0"
 description = "Lightweight local prototype tools for AI Anime Studio."
 requires-python = ">=3.10"
-dependencies = ["Pillow>=10.0.0"]
+dependencies = ["Pillow>=10.0.0", "psd-tools>=1.19.0", "numpy>=1.26"]
 
 [project.scripts]
 anime-studio = "anime_studio.cli:main"
@@ -34,6 +34,8 @@ anime-character-sheet-import = "anime_studio.character_sheet_importer:main"
 anime-dataset-builder-v2 = "anime_studio.dataset_builder_v2:main"
 anime-simple-2p5d = "anime_studio.simple_2p5d_rig:main"
 anime-simple-2p5d-manage = "anime_studio.simple_2p5d_management:main"
+anime-live2d-adjust = "anime_studio.live2d_adjustment:main"
+anime-highres-layered = "anime_studio.high_resolution_layered:main"
 anime-studio-status = "anime_studio.studio_status:main"
 anime-clean-frame-review = "anime_studio.clean_frame_review:main"
 anime-training-diagnostics = "anime_studio.training_diagnostics:main"

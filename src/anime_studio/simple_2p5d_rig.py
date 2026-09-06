@@ -32,13 +32,13 @@ TEMPLATE_ID = "simple_2p5d_v1"
 
 
 PART_SPECS = (
-    ("hair_back", "root", 0, (0.05, 0.00, 0.95, 0.26), (0.50, 0.18)),
-    ("head", "root", 10, (0.12, 0.00, 0.88, 0.28), (0.50, 0.25)),
-    ("face", "head", 20, (0.22, 0.05, 0.78, 0.25), (0.50, 0.24)),
-    ("eyes", "face", 30, (0.28, 0.11, 0.72, 0.17), (0.50, 0.14)),
-    ("mouth", "face", 31, (0.38, 0.18, 0.62, 0.23), (0.50, 0.20)),
-    ("hair_front", "head", 40, (0.12, 0.00, 0.88, 0.18), (0.50, 0.14)),
-    ("torso", "root", 15, (0.18, 0.24, 0.82, 0.58), (0.50, 0.33)),
+    ("hair_back", "head", 0, (0.12, 0.00, 0.88, 0.17), (0.50, 0.17)),
+    ("head", "root", 10, (0.12, 0.00, 0.88, 0.17), (0.50, 0.17)),
+    ("face", "head", 20, (0.26, 0.05, 0.74, 0.17), (0.50, 0.16)),
+    ("eyes", "face", 30, (0.28, 0.10, 0.72, 0.15), (0.50, 0.13)),
+    ("mouth", "face", 31, (0.38, 0.125, 0.62, 0.165), (0.50, 0.15)),
+    ("hair_front", "head", 40, (0.12, 0.00, 0.88, 0.17), (0.50, 0.14)),
+    ("torso", "root", 15, (0.18, 0.17, 0.82, 0.58), (0.50, 0.33)),
     ("left_arm", "torso", 18, (0.00, 0.25, 0.38, 0.67), (0.28, 0.30)),
     ("right_arm", "torso", 18, (0.62, 0.25, 1.00, 0.67), (0.72, 0.30)),
     ("hips", "torso", 16, (0.22, 0.52, 0.78, 0.70), (0.50, 0.58)),
@@ -224,7 +224,7 @@ def build_simple_2p5d_rig_pipeline(
             "workflow_ready": workflow_ready,
             "manual_review": [
                 "Review every crop before using it as training data.",
-                "Simple masks and mesh zones are deterministic drafts, not semantic segmentation.",
+                "Review the deterministic non-overlapping head segmentation before production use.",
                 "Adjust pivots and deformers in Live2D Cubism before production use.",
             ],
         },
@@ -340,7 +340,7 @@ def generate_rig_assets(
             centering=(0.5, 0.45),
         )
     identity_reference.save(identity_reference_path)
-    part_masks = build_part_masks(silhouette)
+    part_masks = build_part_masks(silhouette, image)
     part_records: list[dict[str, Any]] = []
     for part_id, parent_id, z_order, _, pivot in PART_SPECS:
         mask = part_masks[part_id]
@@ -584,7 +584,7 @@ def fill_mask_holes(mask: Image.Image) -> Image.Image:
     return result
 
 
-def build_part_masks(silhouette: Image.Image) -> dict[str, Image.Image]:
+def build_part_masks(silhouette: Image.Image, image: Image.Image | None = None) -> dict[str, Image.Image]:
     bbox = silhouette.getbbox() or (0, 0, silhouette.width, silhouette.height)
     left, top, right, bottom = bbox
     width = max(1, right - left)
@@ -603,6 +603,137 @@ def build_part_masks(silhouette: Image.Image) -> dict[str, Image.Image]:
             fill=255,
         )
         result[part_id] = ImageChops.multiply(silhouette, zone_mask)
+    result.update(build_head_part_masks(silhouette, image))
+    return result
+
+
+def build_head_part_masks(silhouette: Image.Image, image: Image.Image | None = None) -> dict[str, Image.Image]:
+    body_bounds = silhouette.getbbox() or (0, 0, silhouette.width, silhouette.height)
+    body_left, body_top, body_right, body_bottom = body_bounds
+    body_width = max(1, body_right - body_left)
+    body_height = max(1, body_bottom - body_top)
+    head_zone = Image.new("L", silhouette.size, 0)
+    ImageDraw.Draw(head_zone).rectangle(
+        (
+            int(body_left + body_width * 0.12),
+            body_top,
+            int(body_left + body_width * 0.88),
+            int(body_top + body_height * 0.17),
+        ),
+        fill=255,
+    )
+    complete_head = ImageChops.multiply(silhouette, head_zone)
+    head_bounds = complete_head.getbbox()
+    if head_bounds is None:
+        empty = Image.new("L", silhouette.size, 0)
+        return {part_id: empty.copy() for part_id in ("hair_back", "head", "face", "eyes", "mouth", "hair_front")}
+
+    left, top, right, bottom = head_bounds
+    width = max(1, right - left)
+    height = max(1, bottom - top)
+
+    def point(x: float, y: float) -> tuple[int, int]:
+        return int(left + x * width), int(top + y * height)
+
+    def shape(kind: str, coordinates: tuple[float, ...] | list[tuple[float, float]]) -> Image.Image:
+        mask = Image.new("L", silhouette.size, 0)
+        draw = ImageDraw.Draw(mask)
+        if kind == "ellipse":
+            values = coordinates
+            draw.ellipse((*point(values[0], values[1]), *point(values[2], values[3])), fill=255)
+        elif kind == "rectangle":
+            values = coordinates
+            draw.rectangle((*point(values[0], values[1]), *point(values[2], values[3])), fill=255)
+        else:
+            draw.polygon([point(x, y) for x, y in coordinates], fill=255)
+        return ImageChops.multiply(complete_head, mask)
+
+    eyes_window = shape("rectangle", (0.24, 0.43, 0.76, 0.67))
+    mouth_window = shape("ellipse", (0.40, 0.66, 0.60, 0.82))
+    eyes = isolate_face_feature(image, eyes_window, "eyes")
+    mouth = isolate_face_feature(image, mouth_window, "mouth")
+    mouth = subtract_masks(mouth, eyes)
+
+    hair_front_region = Image.new("L", silhouette.size, 0)
+    hair_front_draw = ImageDraw.Draw(hair_front_region)
+    hair_front_draw.polygon(
+        [
+            point(0.04, 0.00),
+            point(0.96, 0.00),
+            point(0.88, 0.50),
+            point(0.66, 0.68),
+            point(0.50, 0.55),
+            point(0.34, 0.68),
+            point(0.12, 0.50),
+        ],
+        fill=255,
+    )
+    hair_front = ImageChops.multiply(complete_head, hair_front_region)
+    hair_front = subtract_masks(hair_front, eyes, mouth)
+
+    face = shape("ellipse", (0.22, 0.25, 0.78, 0.88))
+    face = subtract_masks(face, eyes, mouth, hair_front)
+
+    head = shape("polygon", [(0.37, 0.80), (0.63, 0.80), (0.60, 1.00), (0.40, 1.00)])
+    head = subtract_masks(head, eyes, mouth, hair_front, face)
+
+    used = combine_masks(eyes, mouth, hair_front, face, head)
+    hair_back = ImageChops.subtract(complete_head, used)
+    return {
+        "hair_back": hair_back,
+        "head": head,
+        "face": face,
+        "eyes": eyes,
+        "mouth": mouth,
+        "hair_front": hair_front,
+    }
+
+
+def isolate_face_feature(image: Image.Image | None, window: Image.Image, feature: str) -> Image.Image:
+    if image is None:
+        return window
+    rgb = image.convert("RGB")
+    source = rgb.load()
+    region = window.load()
+    result = Image.new("L", window.size, 0)
+    output = result.load()
+    bounds = window.getbbox()
+    if bounds is None:
+        return result
+    left, top, right, bottom = bounds
+    for y in range(top, bottom):
+        for x in range(left, right):
+            if region[x, y] == 0:
+                continue
+            red, green, blue = source[x, y]
+            maximum = max(red, green, blue)
+            minimum = min(red, green, blue)
+            luma = (red * 299 + green * 587 + blue * 114) // 1000
+            chroma = maximum - minimum
+            if feature == "eyes":
+                selected = luma < 150 or chroma > 42
+            else:
+                selected = luma < 135 or (red > green + 10 and red > blue + 4 and chroma > 24)
+            if selected:
+                output[x, y] = 255
+    expanded = ImageChops.multiply(result.filter(ImageFilter.MaxFilter(3)), window)
+    pixel_count = sum(expanded.histogram()[1:])
+    if pixel_count < 4:
+        return window
+    return expanded
+
+
+def combine_masks(*masks: Image.Image) -> Image.Image:
+    combined = Image.new("L", masks[0].size, 0)
+    for mask in masks:
+        combined = ImageChops.lighter(combined, mask)
+    return combined
+
+
+def subtract_masks(mask: Image.Image, *subtractors: Image.Image) -> Image.Image:
+    result = mask
+    for subtractor in subtractors:
+        result = ImageChops.subtract(result, subtractor)
     return result
 
 
@@ -777,6 +908,11 @@ def build_rig_payload(
         "controls": {
             "depth": project_relative_path(settings, rig_assets["depth"]),
             "pose": project_relative_path(settings, rig_assets["pose"]),
+        },
+        "head_segmentation": {
+            "strategy": "non_overlapping_geometry_and_color_v1",
+            "parts": ["hair_back", "head", "face", "eyes", "mouth", "hair_front"],
+            "guarantees": ["pairwise_disjoint", "complete_head_coverage"],
         },
         "parameters": [
             {"id": "ParamAngleX", "min": -30, "default": 0, "max": 30},
