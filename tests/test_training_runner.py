@@ -12,7 +12,23 @@ class TrainingRunnerTests(TestCase):
     def make_settings(self, root: Path):
         from anime_studio.settings import load_settings
         config = root / "local_6gb.json"
-        config.write_text(json.dumps({"project_root": str(root)}), encoding="utf-8")
+        config.write_text(
+            json.dumps(
+                {
+                    "runtime": {
+                        "name": "test",
+                        "max_vram_gb": 6,
+                        "target_gpu_utilization": 90,
+                        "target_gpu_temp_c": 85,
+                    },
+                    "assets": {"raw_dir": "assets/raw", "processed_dir": "assets/processed"},
+                    "datasets": {"lora_dir": "datasets/lora"},
+                    "models": {"wd14_dir": "models/wd14"},
+                    "asset_types": {"image_extensions": [".png"], "video_extensions": [".mp4"]},
+                }
+            ),
+            encoding="utf-8",
+        )
         return load_settings(config)
 
     def test_requires_explicit_execute(self):
