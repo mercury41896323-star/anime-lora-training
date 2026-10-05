@@ -41,6 +41,7 @@ from .storyboard_review import set_shot_result_decision, write_storyboard_previe
 from .tagger import finalize_tag_sidecars, generate_auto_tag_records, update_manual_tags
 from .timeline_revision import adopt_timeline_revision, review_timeline_revisions
 from .training_readiness import check_training_readiness, run_training_smoke
+from .training_runner import run_kohya_training
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -713,6 +714,16 @@ def build_parser() -> argparse.ArgumentParser:
     training_smoke.add_argument("--min-images", type=int, default=1, help="Minimum image count for smoke readiness.")
     training_smoke.add_argument("--provider", default="baseline", help="Tag provider for smoke auto tags.")
     training_smoke.add_argument("--output", default=None, help="Optional smoke manifest path.")
+    training_run = training_subparsers.add_parser(
+        "run",
+        help="Run the generated Kohya LoRA training script after a readiness check.",
+    )
+    training_run.add_argument("--character-id", required=True, help="Character id.")
+    training_run.add_argument("--execute", action="store_true", help="Explicitly allow GPU training to start.")
+    training_run.add_argument("--min-images", type=int, default=20, help="Minimum image count required before training.")
+    training_run.add_argument("--run-script", default=None, help="Optional run_train.ps1 path.")
+    training_run.add_argument("--output", default=None, help="Optional training run manifest path.")
+    training_run.add_argument("--require-2p5d", action="store_true", help="Require a ready 2.5D Definition.")
     status = subparsers.add_parser(
         "status",
         help="Build a system, character, and production readiness dashboard.",
@@ -1327,6 +1338,22 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Images: {result.image_count}")
         print(f"Issues: {result.issue_count}")
         return 0 if result.ready else 1
+
+    if args.command == "training" and args.training_command == "run":
+        result = run_kohya_training(
+            settings=settings,
+            character_id=args.character_id,
+            execute=args.execute,
+            min_images=args.min_images,
+            require_2p5d=args.require_2p5d,
+            run_script=args.run_script,
+            output_path=args.output,
+        )
+        print(f"Training status: {result.status}")
+        print(f"Exit code: {result.exit_code}")
+        print(f"Run script: {result.run_script}")
+        print(f"Manifest: {result.result_manifest}")
+        return result.exit_code
 
     if args.command == "training" and args.training_command == "smoke":
         result = run_training_smoke(
